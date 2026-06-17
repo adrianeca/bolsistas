@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRASAS Bolsistas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy-900:#0a1628;--navy-800:#0f2035;--navy-700:#162d4a;--navy-600:#1e3a5f;
+  --navy-500:#2a4d76;--navy-400:#3d6b99;--navy-300:#5a8aba;--navy-200:#89afd4;--navy-100:#c0d4e9;
+  --success-500:#22c55e;--success-100:#dcfce7;--success-600:#15803d;
+  --danger-500:#ef4444;--danger-600:#dc2626;--danger-100:#fee2e2;--danger-50:#fef2f2;
+  --warning-500:#f59e0b;--warning-100:#fef3c7;
+  --white:#fff;--gray-50:#f8fafc;--gray-100:#f1f5f9;--gray-200:#e2e8f0;
+  --gray-300:#cbd5e1;--gray-400:#94a3b8;--gray-500:#64748b;--gray-600:#475569;--gray-700:#334155;
+  --font:'DM Sans',-apple-system,sans-serif;
+  --mono:'JetBrains Mono',monospace;
+  --radius:10px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px}
+body{font-family:var(--font);background:var(--gray-100);color:var(--gray-700);min-height:100vh}
+
+/* ── Loading ── */
+#loadingScreen{
+  position:fixed;inset:0;background:var(--navy-900);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;
+}
+.spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,.15);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;margin-bottom:16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{color:rgba(255,255,255,.6);font-size:.85rem}
+
+/* ── Error screen ── */
+#errorScreen{
+  position:fixed;inset:0;background:var(--navy-900);
+  display:none;flex-direction:column;align-items:center;justify-content:center;z-index:9999;
+}
+.error-icon{font-size:3rem;margin-bottom:16px}
+.error-msg{color:rgba(255,255,255,.8);font-size:.95rem;text-align:center;max-width:360px;line-height:1.6}
+.back-hub-btn{
+  margin-top:24px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
+  color:#fff;border-radius:8px;padding:10px 24px;font-size:.85rem;font-weight:600;cursor:pointer;
+  font-family:var(--font);text-decoration:none;display:inline-block;
+}
+.back-hub-btn:hover{background:rgba(255,255,255,.2)}
+
+/* ── App ── */
+#app{display:none;flex-direction:column;min-height:100vh}
+
+/* Header */
+.app-header{
+  background:var(--navy-800);border-bottom:1px solid rgba(255,255,255,.07);
+  padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;
+}
+.header-left{display:flex;align-items:center;gap:14px}
+.header-icon{
+  width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,var(--navy-600),var(--navy-400));
+  display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;
+}
+.header-title{font-size:1rem;font-weight:700;color:#fff;letter-spacing:-.01em}
+.header-subtitle{font-size:.72rem;color:var(--navy-300);margin-top:1px}
+.header-right{display:flex;align-items:center;gap:10px}
+.user-chip{
+  display:flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);
+  border-radius:7px;padding:5px 12px;
+}
+.user-chip-name{font-size:.8rem;font-weight:600;color:#fff}
+.user-chip-role{font-size:.68rem;color:var(--navy-300);text-transform:uppercase;letter-spacing:.05em}
+.hub-link{
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+  color:rgba(255,255,255,.7);border-radius:7px;padding:5px 14px;
+  font-size:.75rem;font-weight:600;cursor:pointer;font-family:var(--font);text-decoration:none;
+  display:flex;align-items:center;gap:6px;transition:background .15s;
+}
+.hub-link:hover{background:rgba(255,255,255,.14);color:#fff}
+
+/* Body */
+.app-body{flex:1;padding:24px 32px;max-width:1600px;margin:0 auto;width:100%}
+
+/* Filters */
+.filters-bar{
+  background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius);
+  padding:16px 20px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:20px;
+}
+.filter-group{display:flex;flex-direction:column;gap:4px}
+.filter-label{font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400)}
+.filter-select,.filter-input{
+  border:1px solid var(--gray-200);border-radius:7px;padding:7px 10px;
+  font-size:.82rem;font-family:var(--font);color:var(--gray-700);outline:none;
+  background:var(--white);min-width:140px;transition:border-color .15s;
+}
+.filter-select:focus,.filter-input:focus{border-color:var(--navy-400)}
+.filter-input{min-width:200px}
+.filter-btn{
+  background:var(--navy-800);color:#fff;border:none;border-radius:7px;padding:8px 18px;
+  font-size:.82rem;font-weight:600;cursor:pointer;font-family:var(--font);
+  transition:background .15s;white-space:nowrap;align-self:flex-end;
+}
+.filter-btn:hover{background:var(--navy-600)}
+.filter-clear{
+  background:var(--white);color:var(--gray-500);border:1px solid var(--gray-200);
+  border-radius:7px;padding:8px 14px;font-size:.82rem;font-weight:600;cursor:pointer;
+  font-family:var(--font);transition:all .15s;align-self:flex-end;
+}
+.filter-clear:hover{background:var(--gray-100);color:var(--gray-700)}
+
+/* Stats bar */
+.stats-bar{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.stat-chip{
+  background:var(--white);border:1px solid var(--gray-200);border-radius:8px;
+  padding:8px 16px;font-size:.8rem;color:var(--gray-600);
+  display:flex;align-items:center;gap:6px;
+}
+.stat-chip strong{color:var(--navy-800);font-weight:700}
+
+/* Admin panel */
+.admin-bar{
+  background:var(--navy-800);border:1px solid rgba(255,255,255,.08);border-radius:var(--radius);
+  padding:16px 20px;margin-bottom:20px;display:none;
+}
+.admin-bar.visible{display:block}
+.admin-bar-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--navy-300);margin-bottom:12px}
+.admin-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.adm-btn{
+  border:none;border-radius:7px;padding:8px 16px;font-size:.82rem;font-weight:600;
+  cursor:pointer;font-family:var(--font);transition:all .15s;display:flex;align-items:center;gap:6px;
+}
+.adm-btn.cycle{background:rgba(245,158,11,.2);color:#fcd34d;border:1px solid rgba(245,158,11,.3)}
+.adm-btn.cycle:hover:not(:disabled){background:rgba(245,158,11,.35)}
+.adm-btn.pdf{background:rgba(34,197,94,.15);color:#86efac;border:1px solid rgba(34,197,94,.25)}
+.adm-btn.pdf:hover:not(:disabled){background:rgba(34,197,94,.3)}
+.adm-btn.email{background:rgba(139,92,246,.2);color:#c4b5fd;border:1px solid rgba(139,92,246,.3)}
+.adm-btn.email:hover:not(:disabled){background:rgba(139,92,246,.35)}
+.adm-btn:disabled{opacity:.45;cursor:not-allowed}
+.adm-log{
+  margin-top:12px;background:rgba(0,0,0,.25);border-radius:7px;padding:12px 14px;
+  font-family:var(--mono);font-size:.75rem;color:rgba(255,255,255,.7);display:none;line-height:1.8;
+}
+.adm-log.visible{display:block}
+.log-ok{color:#86efac}
+.log-err{color:#fca5a5}
+
+/* Table */
+.table-wrap{
+  background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius);
+  overflow:hidden;
+}
+.table-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 20px;border-bottom:1px solid var(--gray-100);
+}
+.table-header-title{font-size:.88rem;font-weight:700;color:var(--navy-800)}
+.table-header-count{font-size:.75rem;color:var(--gray-400)}
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:.8rem}
+thead th{
+  padding:9px 12px;text-align:left;font-size:.67rem;font-weight:700;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);
+  background:var(--gray-50);border-bottom:1px solid var(--gray-200);
+  white-space:nowrap;position:sticky;top:0;
+}
+thead th.editable-col{color:var(--navy-500)}
+tbody tr{border-bottom:1px solid var(--gray-100);transition:background .1s}
+tbody tr:hover{background:var(--gray-50)}
+tbody tr:last-child{border-bottom:none}
+td{padding:9px 12px;color:var(--gray-700);white-space:nowrap;vertical-align:middle}
+td.wrap{white-space:normal;min-width:180px;max-width:280px}
+td .nome{font-weight:600;color:var(--navy-800)}
+td .sub{font-size:.72rem;color:var(--gray-400);margin-top:1px}
+
+/* Editable cells */
+td.editable{cursor:pointer;position:relative}
+td.editable:hover{background:var(--navy-50,#e8eff7)}
+td.editable::after{
+  content:'✎';position:absolute;right:4px;top:50%;transform:translateY(-50%);
+  font-size:.65rem;color:var(--gray-300);opacity:0;transition:opacity .15s;
+}
+td.editable:hover::after{opacity:1}
+td.editable.saving{opacity:.6;pointer-events:none}
+
+.inline-input{
+  width:100%;border:none;outline:none;background:transparent;
+  font-family:var(--font);font-size:.8rem;color:var(--navy-800);font-weight:500;
+  min-width:60px;
+}
+.inline-select{
+  width:100%;border:none;outline:none;background:transparent;
+  font-family:var(--font);font-size:.8rem;color:var(--navy-800);font-weight:500;
+}
+
+/* Badges */
+.badge{
+  display:inline-block;padding:2px 8px;border-radius:20px;
+  font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;
+}
+.badge.mb{background:#dcfce7;color:#15803d}
+.badge.b {background:#dbeafe;color:#1d4ed8}
+.badge.r {background:#fef3c7;color:#b45309}
+.badge.e {background:#f3e8ff;color:#7e22ce}
+.badge.i {background:#fee2e2;color:#b91c1c}
+.badge.n {background:var(--gray-100);color:var(--gray-500)}
+.badge.other{background:var(--gray-100);color:var(--gray-500)}
+
+/* Empty state */
+.empty-state{text-align:center;padding:56px 32px;color:var(--gray-400)}
+.empty-state .empty-icon{font-size:2.5rem;margin-bottom:12px}
+.empty-state p{font-size:.85rem}
+
+/* Toast */
+#toast{
+  position:fixed;bottom:24px;right:24px;
+  background:var(--navy-800);color:#fff;border-radius:10px;
+  padding:12px 18px;font-size:.82rem;font-weight:500;
+  box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:9998;
+  transform:translateY(20px);opacity:0;transition:all .25s;pointer-events:none;
+  display:flex;align-items:center;gap:10px;max-width:360px;
+}
+#toast.show{transform:translateY(0);opacity:1}
+#toast.toast-ok .toast-icon{color:var(--success-500)}
+#toast.toast-err .toast-icon{color:var(--danger-500)}
+
+/* Modals */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(10,22,40,.65);backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;z-index:9990;
+}
+.modal-overlay.open{display:flex}
+.modal-card{
+  background:var(--white);border-radius:16px;padding:32px;width:100%;
+  max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.25);max-height:90vh;overflow-y:auto;
+}
+.modal-title{font-size:1.05rem;font-weight:700;color:var(--navy-800);margin-bottom:6px}
+.modal-sub{font-size:.8rem;color:var(--gray-400);margin-bottom:20px;font-family:var(--mono)}
+.modal-field{margin-bottom:14px}
+.modal-label{display:block;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);margin-bottom:5px}
+.modal-input,.modal-select,.modal-textarea{
+  width:100%;border:1px solid var(--gray-200);border-radius:8px;padding:9px 12px;
+  font-size:.88rem;font-family:var(--font);color:var(--navy-800);outline:none;transition:border-color .15s;
+}
+.modal-input:focus,.modal-select:focus,.modal-textarea:focus{border-color:var(--navy-400)}
+.modal-textarea{min-height:80px;resize:vertical}
+.modal-info{background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;padding:12px 14px;font-size:.82rem;color:var(--gray-600);margin-bottom:14px}
+.modal-info strong{color:var(--navy-800)}
+.recipients-list{font-size:.8rem;color:var(--navy-700)}
+.recipient-tag{
+  display:inline-block;background:var(--navy-100);color:var(--navy-700);
+  border-radius:5px;padding:2px 8px;font-size:.72rem;margin:2px;
+}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:22px}
+.modal-cancel{border:1px solid var(--gray-200);background:var(--white);color:var(--gray-600);border-radius:8px;padding:9px 20px;font-size:.85rem;font-weight:600;cursor:pointer;font-family:var(--font)}
+.modal-primary{background:var(--navy-800);color:#fff;border:none;border-radius:8px;padding:9px 24px;font-size:.85rem;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .15s}
+.modal-primary:hover:not(:disabled){background:var(--navy-600)}
+.modal-primary:disabled{opacity:.5;cursor:not-allowed}
+.modal-danger{background:#dc2626;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:.85rem;font-weight:600;cursor:pointer;font-family:var(--font)}
+.modal-danger:hover:not(:disabled){background:#b91c1c}
+.modal-error-box{background:var(--danger-50);border:1px solid rgba(220,38,38,.3);border-radius:8px;color:var(--danger-600);font-size:.8rem;padding:10px 12px;margin-top:10px;display:none}
+
+/* PDF modal extras */
+.pdf-result{
+  background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;
+  padding:14px 16px;margin:12px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;
+}
+.pdf-link{color:var(--navy-600);font-weight:600;font-size:.85rem;text-decoration:none}
+.pdf-link:hover{text-decoration:underline}
+.chaves-list{display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto}
+.chave-row{
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;padding:10px 14px;
+  gap:10px;
+}
+.chave-label{font-size:.82rem;color:var(--navy-800);font-weight:500;flex:1}
+.chave-actions{display:flex;gap:8px;flex-shrink:0}
+.chave-btn{
+  border:none;border-radius:6px;padding:5px 12px;font-size:.75rem;font-weight:600;
+  cursor:pointer;font-family:var(--font);transition:all .15s;
+}
+.chave-btn.gen{background:var(--success-100);color:var(--success-600)}
+.chave-btn.gen:hover:not(:disabled){background:var(--success-500);color:#fff}
+.chave-btn.mail{background:var(--accent-100,#ede9fe);color:#7c3aed}
+.chave-btn.mail:hover:not(:disabled){background:#7c3aed;color:#fff}
+.chave-btn:disabled{opacity:.45;cursor:not-allowed}
+.chave-pdf-link{font-size:.72rem;color:var(--navy-400);text-decoration:none}
+.chave-pdf-link:hover{color:var(--navy-700);text-decoration:underline}
+
+@media(max-width:768px){
+  .app-body{padding:16px}
+  .filters-bar{flex-direction:column;align-items:stretch}
+  .filter-select,.filter-input{min-width:0;width:100%}
+  .admin-actions{flex-direction:column}
+}
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loadingScreen">
+  <div class="spinner"></div>
+  <div class="loading-text">Carregando BRASAS Bolsistas…</div>
+</div>
+
+<!-- Error -->
+<div id="errorScreen">
+  <div class="error-icon">🔒</div>
+  <div class="error-msg" id="errorMsg">Erro de acesso.</div>
+  <a class="back-hub-btn" href="javascript:history.back()">← Voltar ao Hub</a>
+</div>
+
+<!-- App -->
+<div id="app">
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="header-icon">🎓</div>
+      <div>
+        <div class="header-title">BRASAS Bolsistas</div>
+        <div class="header-subtitle">Gestão de alunos bolsistas</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="user-chip">
+        <div>
+          <div class="user-chip-name" id="userChipName"></div>
+          <div class="user-chip-role" id="userChipRole"></div>
+        </div>
+      </div>
+      <a class="hub-link" href="javascript:history.back()">
+        ← Hub
+      </a>
+    </div>
+  </header>
+
+  <div class="app-body">
+
+    <!-- Admin bar -->
+    <div class="admin-bar" id="adminBar">
+      <div class="admin-bar-title">Ações administrativas</div>
+      <div class="admin-actions">
+        <button class="adm-btn cycle" id="btnCiclo" onclick="openCicloConfirm()">
+          ↺ Executar Ciclo Mensal
+        </button>
+        <button class="adm-btn pdf" id="btnPDF" onclick="openPDFModal()">
+          📄 Gerar / Enviar PDFs
+        </button>
+      </div>
+      <div class="adm-log" id="adminLog"></div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-bar">
+      <div class="filter-group">
+        <label class="filter-label">Ano</label>
+        <select class="filter-select" id="fAno"><option value="">Todos</option></select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Mês</label>
+        <select class="filter-select" id="fMes"><option value="">Todos</option></select>
+      </div>
+      <div class="filter-group" id="fUnidadeWrap">
+        <label class="filter-label">Unidade</label>
+        <select class="filter-select" id="fUnidade"><option value="">Todas</option></select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Origem da Bolsa</label>
+        <select class="filter-select" id="fOrigem"><option value="">Todas</option></select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Buscar aluno / turma</label>
+        <input class="filter-input" id="fBusca" type="text" placeholder="Nome ou turma…" onkeydown="if(event.key==='Enter')applyFilters()">
+      </div>
+      <button class="filter-btn" onclick="applyFilters()">Filtrar</button>
+      <button class="filter-clear" onclick="clearFilters()">Limpar</button>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-bar" id="statsBar"></div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <div class="table-header">
+        <span class="table-header-title">Alunos Bolsistas</span>
+        <span class="table-header-count" id="tableCount"></span>
+      </div>
+      <div class="table-scroll">
+        <table id="dataTable">
+          <thead>
+            <tr>
+              <th>Unidade</th>
+              <th>Ano</th>
+              <th>Mês</th>
+              <th>Nome do Aluno</th>
+              <th>Turma</th>
+              <th>Origem da Bolsa</th>
+              <th>% Bolsa</th>
+              <th>Book</th>
+              <th>Frequência</th>
+              <th>Horário</th>
+              <th>Dias Prev.</th>
+              <th class="editable-col">Dias Assist. ✎</th>
+              <th>Valor</th>
+              <th class="editable-col">MT ✎</th>
+              <th class="editable-col">WT ✎</th>
+              <th class="editable-col">OC ✎</th>
+              <th class="editable-col">OT ✎</th>
+              <th class="editable-col">Aproveitamento ✎</th>
+              <th class="editable-col">Observações ✎</th>
+              <th class="editable-col">Obs. E-mail ✎</th>
+              <th>Data 1ª Aula</th>
+              <th>Início Book</th>
+              <th>Prev. Conclusão</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <tr><td colspan="23"><div class="empty-state"><div class="empty-icon">📋</div><p>Aplique filtros para carregar os dados.</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /app-body -->
+</div><!-- /app -->
+
+<!-- Toast -->
+<div id="toast"><span class="toast-icon"></span><span id="toastMsg"></span></div>
+
+<!-- Modal: Confirmar Ciclo -->
+<div class="modal-overlay" id="cicloModal">
+  <div class="modal-card">
+    <div class="modal-title">Executar Ciclo Mensal</div>
+    <div class="modal-info">
+      Este ciclo executará as seguintes etapas em sequência:
+      <ol style="margin-top:8px;padding-left:18px;line-height:2">
+        <li>Backup do mês atual → <code>db_bolsistas_mes_anterior</code></li>
+        <li>Calcular dias úteis na <code>bolsistas_consolidado</code></li>
+        <li>Copiar linhas (AA="Sim") para <code>Bolsistas App</code></li>
+        <li>Formatar coluna de horários</li>
+      </ol>
+    </div>
+    <div class="modal-error-box" id="cicloError"></div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModal('cicloModal')">Cancelar</button>
+      <button class="modal-danger" id="cicloConfirmBtn" onclick="executarCiclo()">Executar agora</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: PDF / Email -->
+<div class="modal-overlay" id="pdfModal">
+  <div class="modal-card" style="max-width:620px">
+    <div class="modal-title">Gerar PDFs e Enviar E-mails</div>
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <div class="filter-group">
+        <label class="filter-label">Ano</label>
+        <select class="filter-select" id="pdfAno" onchange="loadChaves()" style="min-width:100px"></select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Mês</label>
+        <select class="filter-select" id="pdfMes" onchange="loadChaves()" style="min-width:130px"></select>
+      </div>
+    </div>
+    <div class="chaves-list" id="chavesList">
+      <div style="color:var(--gray-400);font-size:.82rem;padding:20px 0;text-align:center">Selecione um mês para ver as origens.</div>
+    </div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="modal-cancel" onclick="closeModal('pdfModal')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Enviar E-mail -->
+<div class="modal-overlay" id="emailModal">
+  <div class="modal-card">
+    <div class="modal-title">Enviar Relatório por E-mail</div>
+    <div class="modal-sub" id="emailChaveLabel"></div>
+    <div class="modal-info" id="emailInfo">Carregando informações…</div>
+    <div class="modal-field">
+      <label class="modal-label">Observações gerais (opcional)</label>
+      <textarea class="modal-textarea" id="emailObs" placeholder="Texto adicional que aparecerá no e-mail e no PDF…"></textarea>
+    </div>
+    <div class="modal-error-box" id="emailError"></div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModal('emailModal')">Cancelar</button>
+      <button class="modal-primary" id="emailSendBtn" onclick="confirmarEnvio()">Enviar E-mail</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOKEN = '<?= sessionToken ?>';
+let USER = null;
+let ALL_ROWS = [];
+let FILTER_OPTIONS = {};
+let _currentPDFFiles = {}; // chavePDF → fileId
+
+// ─── Boot ────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', boot);
+
+function boot() {
+  google.script.run
+    .withSuccessHandler(onSessionValidated)
+    .withFailureHandler(err => showError('Erro de conexão: ' + (err.message || err)))
+    .validateSession(TOKEN);
+}
+
+function onSessionValidated(jsonStr) {
+  const res = JSON.parse(jsonStr);
+  if (!res.ok) { showError(res.error); return; }
+
+  USER = res;
+  document.getElementById('userChipName').textContent = USER.nome;
+  document.getElementById('userChipRole').textContent = USER.role;
+
+  if (USER.isAdmin || USER.canSendEmail) {
+    document.getElementById('adminBar').classList.add('visible');
+  }
+  if (!USER.isAdmin) {
+    document.getElementById('fUnidadeWrap').style.display = 'none';
+  }
+
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+
+  loadFilterOptions();
+}
+
+function showError(msg) {
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('errorMsg').textContent = msg;
+  document.getElementById('errorScreen').style.display = 'flex';
+}
+
+// ─── Filtros ─────────────────────────────────────────────────
+function loadFilterOptions() {
+  google.script.run
+    .withSuccessHandler(res => {
+      const d = JSON.parse(res);
+      if (!d.ok) return;
+      FILTER_OPTIONS = d;
+      populateSelect('fAno',     d.anos,     'Todos os anos');
+      populateSelect('fMes',     d.meses,    'Todos os meses');
+      populateSelect('fUnidade', d.unidades, 'Todas');
+      populateSelect('fOrigem',  d.origens,  'Todas');
+
+      // Pré-seleciona o ano mais recente se houver apenas um
+      if (d.anos && d.anos.length === 1) {
+        document.getElementById('fAno').value = d.anos[0];
+      }
+    })
+    .withFailureHandler(() => {})
+    .getFilterOptions(TOKEN);
+}
+
+function populateSelect(id, values, placeholder) {
+  const sel = document.getElementById(id);
+  sel.innerHTML = `<option value="">${placeholder}</option>`;
+  (values || []).forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v; opt.textContent = v;
+    sel.appendChild(opt);
+  });
+}
+
+function applyFilters() {
+  const params = {
+    mes:        document.getElementById('fMes').value,
+    ano:        document.getElementById('fAno').value,
+    unidade:    document.getElementById('fUnidade').value,
+    origemBolsa:document.getElementById('fOrigem').value,
+    busca:      document.getElementById('fBusca').value.trim(),
+  };
+
+  document.getElementById('tableBody').innerHTML =
+    '<tr><td colspan="23"><div class="empty-state"><div class="spinner" style="margin:0 auto 8px"></div><p>Carregando…</p></div></td></tr>';
+  document.getElementById('statsBar').innerHTML = '';
+
+  google.script.run
+    .withSuccessHandler(res => {
+      const d = JSON.parse(res);
+      if (!d.ok) { toast('Erro: ' + d.error, false); return; }
+      ALL_ROWS = d.rows;
+      renderTable(d.rows);
+    })
+    .withFailureHandler(err => toast('Erro: ' + (err.message || err), false))
+    .getBolsistasData(TOKEN, JSON.stringify(params));
+}
+
+function clearFilters() {
+  ['fMes','fAno','fUnidade','fOrigem'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('fBusca').value = '';
+  document.getElementById('tableBody').innerHTML =
+    '<tr><td colspan="23"><div class="empty-state"><div class="empty-icon">📋</div><p>Aplique filtros para carregar os dados.</p></div></td></tr>';
+  document.getElementById('statsBar').innerHTML = '';
+  document.getElementById('tableCount').textContent = '';
+}
+
+// ─── Tabela ──────────────────────────────────────────────────
+const APROV_OPTIONS = ['MB','B','R','E','I','N',''];
+
+function renderTable(rows) {
+  const tbody = document.getElementById('tableBody');
+  document.getElementById('tableCount').textContent = rows.length + ' aluno' + (rows.length !== 1 ? 's' : '');
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="23"><div class="empty-state"><div class="empty-icon">🔍</div><p>Nenhum aluno encontrado com esses filtros.</p></div></td></tr>';
+    renderStats([]);
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    const canEdit = USER.canEdit;
+    return `<tr data-row="${r.rowIndex}">
+      <td>${r.unidade}</td>
+      <td>${r.ano}</td>
+      <td>${r.mes}</td>
+      <td><div class="nome">${esc(r.nome)}</div><div class="sub">${esc(r.origemBolsa)}</div></td>
+      <td class="sub">${esc(r.turma)}</td>
+      <td style="font-size:.75rem">${esc(r.origemBolsa)}</td>
+      <td style="text-align:center">${r.percentual !== '' ? r.percentual + '%' : ''}</td>
+      <td>${esc(r.book)}</td>
+      <td style="text-align:center">${esc(r.frequencia)}</td>
+      <td style="font-family:var(--mono);font-size:.75rem">${esc(r.horario)}</td>
+      <td style="text-align:center">${r.diasPrevistos !== '' ? r.diasPrevistos : ''}</td>
+      ${editableNumCell(r, 'diasAssistidos', canEdit)}
+      <td style="text-align:right;font-family:var(--mono);font-size:.75rem">${r.valor !== '' ? 'R$ ' + r.valor : ''}</td>
+      ${editableNumCell(r, 'mt', canEdit)}
+      ${editableNumCell(r, 'wt', canEdit)}
+      ${editableNumCell(r, 'oc', canEdit)}
+      ${editableNumCell(r, 'ot', canEdit)}
+      ${editableAprovCell(r, canEdit)}
+      ${editableTextCell(r, 'observacoes', canEdit)}
+      ${editableTextCell(r, 'obsExtrasEmail', canEdit)}
+      <td style="font-size:.75rem">${r.data1aAula}</td>
+      <td style="font-size:.75rem">${r.dataInicioBook}</td>
+      <td style="font-size:.75rem">${r.dataPrevConclusao}</td>
+    </tr>`;
+  }).join('');
+
+  renderStats(rows);
+
+  if (USER.canEdit) {
+    tbody.querySelectorAll('td.editable').forEach(td => {
+      td.addEventListener('click', () => startEdit(td));
+    });
+  }
+}
+
+function editableNumCell(r, field, canEdit) {
+  const v = r[field] !== '' ? r[field] : '';
+  if (!canEdit) return `<td style="text-align:center">${v}</td>`;
+  return `<td class="editable" data-field="${field}" data-row="${r.rowIndex}" data-val="${v}" style="text-align:center;min-width:60px">${v}</td>`;
+}
+
+function editableTextCell(r, field, canEdit) {
+  const v = esc(String(r[field] || ''));
+  if (!canEdit) return `<td class="wrap">${v}</td>`;
+  return `<td class="editable wrap" data-field="${field}" data-row="${r.rowIndex}" data-val="${String(r[field]||'')}">${v}</td>`;
+}
+
+function editableAprovCell(r, canEdit) {
+  const v  = String(r.aproveitamento || '');
+  if (!canEdit) return `<td style="text-align:center">${v ? `<span class="badge ${v.toLowerCase()}">${v}</span>` : ''}</td>`;
+  const badge = v ? `<span class="badge ${v.toLowerCase()}">${v}</span>` : '<span style="color:var(--gray-300)">—</span>';
+  return `<td class="editable" data-field="aproveitamento" data-row="${r.rowIndex}" data-val="${v}" style="text-align:center;min-width:80px">${badge}</td>`;
+}
+
+function startEdit(td) {
+  if (td.querySelector('input,select,textarea')) return;
+  const field = td.dataset.field;
+  const row   = td.dataset.row;
+  const val   = td.dataset.val || '';
+
+  let input;
+  if (field === 'aproveitamento') {
+    input = document.createElement('select');
+    input.className = 'inline-select';
+    APROV_OPTIONS.forEach(o => {
+      const opt = document.createElement('option');
+      opt.value = o; opt.textContent = o || '—';
+      if (o === val) opt.selected = true;
+      input.appendChild(opt);
+    });
+  } else if (field === 'observacoes' || field === 'obsExtrasEmail') {
+    input = document.createElement('textarea');
+    input.className = 'inline-input';
+    input.value = val;
+    input.rows = 2;
+    input.style.resize = 'vertical';
+    input.style.minWidth = '200px';
+  } else {
+    input = document.createElement('input');
+    input.className = 'inline-input';
+    input.type = 'text';
+    input.value = val;
+    input.style.textAlign = 'center';
+  }
+
+  td.innerHTML = '';
+  td.appendChild(input);
+  input.focus();
+  if (input.select) input.select();
+
+  const save = () => {
+    const newVal = input.value;
+    if (String(newVal) === String(val)) { restoreCell(td, field, val); return; }
+    saveField(td, row, field, newVal, val);
+  };
+
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && field !== 'observacoes' && field !== 'obsExtrasEmail') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { restoreCell(td, field, val); }
+  });
+}
+
+function restoreCell(td, field, val) {
+  if (field === 'aproveitamento') {
+    td.innerHTML = val ? `<span class="badge ${val.toLowerCase()}">${val}</span>` : '<span style="color:var(--gray-300)">—</span>';
+  } else {
+    td.textContent = val;
+  }
+  td.dataset.val = val;
+}
+
+function saveField(td, rowIndex, field, newVal, oldVal) {
+  td.classList.add('saving');
+  td.innerHTML = '<span style="color:var(--gray-400);font-size:.75rem">Salvando…</span>';
+
+  google.script.run
+    .withSuccessHandler(res => {
+      td.classList.remove('saving');
+      const d = JSON.parse(res);
+      if (!d.ok) {
+        toast('Erro ao salvar: ' + d.error, false);
+        restoreCell(td, field, oldVal);
+        return;
+      }
+      td.dataset.val = newVal;
+      restoreCell(td, field, newVal);
+      toast('Salvo!', true);
+      // Update local array
+      const r = ALL_ROWS.find(x => x.rowIndex == rowIndex);
+      if (r) r[field] = newVal;
+    })
+    .withFailureHandler(err => {
+      td.classList.remove('saving');
+      toast('Erro: ' + (err.message || err), false);
+      restoreCell(td, field, oldVal);
+    })
+    .updateBolsista(TOKEN, JSON.stringify({ rowIndex: parseInt(rowIndex), field, value: newVal }));
+}
+
+// ─── Stats ───────────────────────────────────────────────────
+function renderStats(rows) {
+  const bar = document.getElementById('statsBar');
+  if (!rows.length) { bar.innerHTML = ''; return; }
+  const total  = rows.length;
+  const origens = new Set(rows.map(r => r.origemBolsa)).size;
+  const unids   = new Set(rows.map(r => r.unidade)).size;
+  bar.innerHTML = `
+    <div class="stat-chip"><strong>${total}</strong> alunos</div>
+    <div class="stat-chip"><strong>${unids}</strong> unidades</div>
+    <div class="stat-chip"><strong>${origens}</strong> origens de bolsa</div>`;
+}
+
+// ─── Ciclo Mensal ────────────────────────────────────────────
+function openCicloConfirm() {
+  document.getElementById('cicloError').style.display = 'none';
+  document.getElementById('cicloError').textContent = '';
+  document.getElementById('cicloConfirmBtn').disabled = false;
+  openModal('cicloModal');
+}
+
+function executarCiclo() {
+  const btn = document.getElementById('cicloConfirmBtn');
+  btn.disabled = true;
+  btn.textContent = 'Executando…';
+  document.getElementById('cicloError').style.display = 'none';
+
+  google.script.run
+    .withSuccessHandler(res => {
+      const d = JSON.parse(res);
+      btn.textContent = 'Executar agora';
+      if (!d.ok) {
+        const errEl = document.getElementById('cicloError');
+        errEl.textContent = d.error;
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        return;
+      }
+      closeModal('cicloModal');
+      const log = document.getElementById('adminLog');
+      log.innerHTML = d.log.map(l => `<div class="log-ok">✓ ${esc(l)}</div>`).join('');
+      log.classList.add('visible');
+      toast('Ciclo mensal executado com sucesso!', true);
+    })
+    .withFailureHandler(err => {
+      const errEl = document.getElementById('cicloError');
+      errEl.textContent = err.message || err;
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Executar agora';
+    })
+    .runCicloMensal(TOKEN);
+}
+
+// ─── PDF / Email modal ───────────────────────────────────────
+function openPDFModal() {
+  _currentPDFFiles = {};
+  const anos  = FILTER_OPTIONS.anos  || [];
+  const meses = FILTER_OPTIONS.meses || [];
+  populateSelect('pdfAno', anos,  'Selecione');
+  populateSelect('pdfMes', meses, 'Selecione');
+  document.getElementById('chavesList').innerHTML =
+    '<div style="color:var(--gray-400);font-size:.82rem;padding:20px 0;text-align:center">Selecione mês e ano para ver as origens.</div>';
+  openModal('pdfModal');
+}
+
+function loadChaves() {
+  const mes = document.getElementById('pdfMes').value;
+  const ano = document.getElementById('pdfAno').value;
+  if (!mes || !ano) return;
+
+  document.getElementById('chavesList').innerHTML =
+    '<div style="color:var(--gray-400);font-size:.82rem;padding:20px 0;text-align:center">Carregando…</div>';
+
+  google.script.run
+    .withSuccessHandler(res => {
+      const d = JSON.parse(res);
+      if (!d.ok) { document.getElementById('chavesList').innerHTML = '<div style="color:var(--danger-500)">' + esc(d.error) + '</div>'; return; }
+      renderChaves(d.chaves);
+    })
+    .withFailureHandler(err => {
+      document.getElementById('chavesList').innerHTML = '<div style="color:var(--danger-500)">Erro: ' + esc(err.message||err) + '</div>';
+    })
+    .getChavesPDF(TOKEN, mes, ano);
+}
+
+function renderChaves(chaves) {
+  const wrap = document.getElementById('chavesList');
+  if (!chaves.length) {
+    wrap.innerHTML = '<div style="color:var(--gray-400);font-size:.82rem;padding:20px 0;text-align:center">Nenhuma chave encontrada para este período.</div>';
+    return;
+  }
+  wrap.innerHTML = chaves.map(c => {
+    const parts = c.split(' - ');
+    const label = parts.slice(2).join(' - ') || c; // show Origem Bolsa part
+    return `<div class="chave-row" id="chave-row-${btoa(c).replace(/=/g,'')}">
+      <div class="chave-label">${esc(label)}</div>
+      <div class="chave-actions">
+        <button class="chave-btn gen" onclick="gerarPDF('${esc(c)}', this)" title="Gerar PDF">📄 PDF</button>
+        <button class="chave-btn mail" onclick="openEmailModal('${esc(c)}', this)" title="Enviar e-mail" ${USER.canSendEmail ? '' : 'disabled'}>📧 Enviar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function gerarPDF(chavePDF, btn) {
+  btn.disabled = true;
+  btn.textContent = '⏳';
+
+  google.script.run
+    .withSuccessHandler(res => {
+      const d = JSON.parse(res);
+      btn.disabled = false;
+      btn.textContent = '📄 PDF';
+      if (!d.ok) { toast('Erro: ' + d.error, false); return; }
+
+      _currentPDFFiles[chavePDF] = d.fileId;
+
+      // Show link next to button
+      const row = btn.closest('.chave-row');
+      const existing = row.querySelector('.chave-pdf-link');
+      if (existing) existing.remove();
+      const link = document.createElement('a');
+      link.href = d.viewUrl;
+      link.target = '_blank';
+      link.className = 'chave-pdf-link';
+      link.textContent = '↗ Ver PDF';
+      row.querySelector('.chave-actions').appendChild(link);
+
+      toast(`PDF gerado: ${d.totalAlunos} alunos`, true);
+    })
+    .withFailureHandler(err => {
+      btn.disabled = false; btn.textContent = '📄 PDF';
+      toast('Erro: ' + (err.message||err), false);
+    })
+    .gerarPDF(TOKEN, chavePDF);
+}
+
+// ─── Email modal ─────────────────────────────────────────────
+let _currentChavePDF = '';
+
+function openEmailModal(chavePDF, btn) {
+  _currentChavePDF = chavePDF;
+  document.getElementById('emailChaveLabel').textContent = chavePDF;
+  document.getElementById('emailInfo').textContent = 'Carregando informações do parceiro…';
+  document.getElementById('emailObs').value = '';
+  document.getElementById('emailError').style.display = 'none';
+  document.getElementById('emailSendBtn').disabled = true;
+  openModal('emailModal');
+
+  google.script.run
+    .withSuccessHandler(res => {
+      const d = JSON.parse(res);
+      if (!d.ok) {
+        document.getElementById('emailInfo').innerHTML = `<span style="color:var(--danger-600)">${esc(d.error)}</span>`;
+        return;
+      }
+      const p = d.parceiro;
+      const tos = [p.to, ...p.cc].filter(Boolean);
+      const hasPDF = !!_currentPDFFiles[chavePDF];
+      document.getElementById('emailInfo').innerHTML = `
+        <div style="margin-bottom:8px"><strong>${d.totalAlunos}</strong> aluno${d.totalAlunos !== 1 ? 's' : ''} neste relatório</div>
+        <div style="margin-bottom:6px"><strong>Para:</strong> ${tos.map(e => `<span class="recipient-tag">${esc(e)}</span>`).join(' ')}</div>
+        ${d.obsExtras.length ? `<div style="margin-top:8px;font-size:.78rem;color:var(--gray-500)"><b>Obs. individuais:</b> ${d.obsExtras.map(esc).join(' | ')}</div>` : ''}
+        ${!hasPDF ? '<div style="margin-top:10px;color:var(--warning-500);font-size:.78rem">⚠ Gere o PDF primeiro para que ele seja anexado ao e-mail.</div>' : '<div style="margin-top:8px;color:var(--success-600);font-size:.78rem">✓ PDF gerado e pronto para anexo.</div>'}`;
+      document.getElementById('emailSendBtn').disabled = false;
+    })
+    .withFailureHandler(err => {
+      document.getElementById('emailInfo').innerHTML = `<span style="color:var(--danger-600)">Erro: ${esc(err.message||err)}</span>`;
+    })
+    .getEmailPreview(TOKEN, chavePDF);
+}
+
+function confirmarEnvio() {
+  const obs     = document.getElementById('emailObs').value.trim();
+  const fileId  = _currentPDFFiles[_currentChavePDF] || '';
+  const btn     = document.getElementById('emailSendBtn');
+  const errEl   = document.getElementById('emailError');
+
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  errEl.style.display = 'none';
+
+  google.script.run
+    .withSuccessHandler(res => {
+      const d = JSON.parse(res);
+      btn.disabled = false; btn.textContent = 'Enviar E-mail';
+      if (!d.ok) { errEl.textContent = d.error; errEl.style.display = 'block'; return; }
+      closeModal('emailModal');
+      toast(`E-mail enviado para ${d.to}!`, true);
+    })
+    .withFailureHandler(err => {
+      btn.disabled = false; btn.textContent = 'Enviar E-mail';
+      errEl.textContent = err.message || err; errEl.style.display = 'block';
+    })
+    .enviarEmail(TOKEN, JSON.stringify({ chavePDF: _currentChavePDF, fileId, obsExtra: obs }));
+}
+
+// ─── Helpers UI ──────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+let _toastTimer;
+function toast(msg, ok) {
+  const el   = document.getElementById('toast');
+  const icon = el.querySelector('.toast-icon');
+  document.getElementById('toastMsg').textContent = msg;
+  icon.textContent = ok ? '✓' : '✕';
+  el.className = 'show ' + (ok ? 'toast-ok' : 'toast-err');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
