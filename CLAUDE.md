@@ -16,8 +16,8 @@ Google Apps Script — painel de gestão de alunos bolsistas.
 
 **Abas em USERS_SHEET:**
 - `SESSOES` — tokens de sessão com expiração
-- `ROLES` — permissões por role (coluna `bolsistas` = TRUE/FALSE)
-- `USUARIOS` — cadastro de usuários (coluna `extraDashboards` para acesso individual)
+- `ROLES` — permissões por role (coluna `bolsistas` = TRUE/FALSE) — não usado em `_hasAccess` atualmente
+- `USUARIOS` — cadastro de usuários; coluna A = e-mail, colunas F e G = `acessos_dashboards` (lista separada por vírgula)
 
 **Abas em BOLSISTAS_SHEET:**
 - `Bolsistas App` — dados principais lidos/editados pelo painel
@@ -46,11 +46,11 @@ const ADMIN_ROLES = ['admin'];
 ## Melhorias planejadas (não implementadas)
 
 ### Performance — carregamento lento
-O carregamento está lento por 3 leituras sequenciais de planilha na validação + 2 roundtrips ao servidor.
+O carregamento está lento por roundtrips ao servidor na validação.
 
 **Plano:**
 1. **Fundir chamadas iniciais** — criar `initApp(token)` que valida sessão E retorna opções de filtro em um único roundtrip (elimina uma chamada ao servidor)
 2. **CacheService** — cachear objeto do usuário por ~10 min após primeira validação; chamadas seguintes leem do cache em vez de abrir planilha
-3. **Simplificar `_hasAccess`** — usar coluna `dashboards` (ou `extraDashboards`) na aba USUARIOS, buscando pelo e-mail; elimina leitura da aba ROLES
 
-> **Pendente:** confirmar nome exato da coluna na aba USUARIOS antes de implementar o item 3.
+**Implementado:**
+- ~~Simplificar `_hasAccess`~~ — `_hasAccess` agora lê apenas a aba USUARIOS (coluna A = e-mail, F e G = `acessos_dashboards`), eliminando a leitura da aba ROLES.

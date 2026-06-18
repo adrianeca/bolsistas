@@ -69,34 +69,18 @@ function _hasAccess(ss, role, email) {
   const norm = s => String(s || '').trim().toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-  // Check ROLES sheet bolsistas column
-  const rolesSheet = ss.getSheetByName('ROLES');
-  if (rolesSheet) {
-    const data  = rolesSheet.getDataRange().getValues();
-    const heads = data[0].map(h => norm(String(h)));
-    const col   = heads.findIndex(h => h === 'bolsistas');
-    if (col >= 0) {
-      for (let i = 1; i < data.length; i++) {
-        if (norm(data[i][0]) === norm(role))
-          return String(data[i][col]).trim().toUpperCase() === 'TRUE';
-      }
-    }
-  }
-
-  // Fallback: check extraDashboards in USUARIOS
   const usuSheet = ss.getSheetByName('USUARIOS');
-  if (usuSheet) {
-    const d     = usuSheet.getDataRange().getValues();
-    const normH = s => norm(s).replace(/[^a-z0-9]/g, '');
-    const h     = d[0].map(normH);
-    const iE    = h.findIndex(x => x === 'email');
-    const iX    = h.findIndex(x => x === 'extradashboards');
-    if (iE >= 0 && iX >= 0) {
-      for (let i = 1; i < d.length; i++) {
-        if (String(d[i][iE] || '').trim().toLowerCase() !== email) continue;
-        if (norm(String(d[i][iX] || '')).includes('bolsistas')) return true;
-      }
-    }
+  if (!usuSheet) return false;
+
+  const d = usuSheet.getDataRange().getValues();
+  for (let i = 1; i < d.length; i++) {
+    if (norm(d[i][0]) !== norm(email)) continue;
+    // Colunas F (índice 5) e G (índice 6) = acessos_dashboards
+    const acessos = [d[i][5], d[i][6]]
+      .join(',')
+      .split(',')
+      .map(s => norm(s));
+    return acessos.includes('bolsistas');
   }
 
   return false;
