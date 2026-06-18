@@ -32,6 +32,12 @@ function validateSession(token) {
 function _getUser(token) {
   if (!token) throw new Error('Sessão não encontrada. Acesse pelo hub.');
 
+  // Cache do objeto de usuário por 10 min (evita ler SESSOES a cada chamada)
+  const cache    = CacheService.getScriptCache();
+  const cacheKey = 'user_' + token;
+  const cached   = cache.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
   const ss        = SpreadsheetApp.openById(USERS_SHEET_ID);
   const sessSheet = ss.getSheetByName('SESSOES');
   if (!sessSheet) throw new Error('Sessão inválida.');
@@ -44,25 +50,42 @@ function _getUser(token) {
     const expira = rows[i][6] ? new Date(rows[i][6]) : null;
     if (expira && expira < now) throw new Error('Sessão expirada. Acesse pelo hub novamente.');
 
-    const role = String(rows[i][3]).trim().toLowerCase();
+    const role  = String(rows[i][3]).trim().toLowerCase();
     const email = String(rows[i][1]).trim().toLowerCase();
 
     if (!_hasAccess(ss, role, email)) {
       throw new Error('Sem permissão para acessar o painel de bolsistas.');
     }
 
-    return {
+    const unidade = _getUserUnidade(ss, email);
+
+    const userObj = {
       email,
       nome:         String(rows[i][2]).trim(),
       role,
-      unidade:      String(rows[i][4]).trim(),
+      unidade,
       canEdit:      EDIT_ROLES.includes(role),
       canSendEmail: EMAIL_ROLES.includes(role),
       isAdmin:      ADMIN_ROLES.includes(role),
     };
+
+    try { cache.put(cacheKey, JSON.stringify(userObj), 600); } catch(e) {}
+    return userObj;
   }
 
   throw new Error('Sessão não encontrada. Acesse pelo hub.');
+}
+
+function _getUserUnidade(ss, email) {
+  const norm  = s => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const sheet = ss.getSheetByName('USUARIOS');
+  if (!sheet) return '';
+  const d = sheet.getDataRange().getValues();
+  for (let i = 1; i < d.length; i++) {
+    if (norm(d[i][0]) !== norm(email)) continue;
+    return String(d[i][4] || '').trim(); // Col E = unidade
+  }
+  return '';
 }
 
 function _hasAccess(ss, role, email) {
@@ -86,6 +109,97 @@ function _hasAccess(ss, role, email) {
   return false;
 }
 
+// ─── Init unificado (filtros + dados, com cache) ─────────────
+function initApp(token) {
+  try {
+    const user  = _getUser(token); // usa cache de usuário
+    const cache    = CacheService.getScriptCache();
+    const dataKey  = 'appdata_' + token;
+    const cached   = cache.get(dataKey);
+    if (cached) return cached; // JSON já formatado, retorna direto
+
+    const ss    = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+    const sheet = ss.getSheetByName('Bolsistas App');
+    if (!sheet) return JSON.stringify({ ok: false, error: 'Aba "Bolsistas App" não encontrada.' });
+
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 2) return JSON.stringify({
+      ok: true, user, rows: [], anos: [], meses: [], unidades: [], origens: [],
+    });
+
+    const norm = s => String(s || '').trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+    const userUnidades = (user.isAdmin || !user.unidade)
+      ? null
+      : user.unidade.split(/[,|]/).map(s => norm(s.trim())).filter(Boolean);
+
+    const rows = [];
+    const meses = new Set(), anos = new Set(), unidades = new Set(), origens = new Set();
+
+    for (let i = 1; i < data.length; i++) {
+      const r       = data[i];
+      const unidade = String(r[2] || '').trim();
+      const mes     = String(r[3] || '').trim();
+      const ano     = String(r[4] || '').trim();
+
+      if (!unidade && !mes) continue;
+      if (userUnidades && !userUnidades.includes(norm(unidade))) continue;
+
+      if (mes)     meses.add(mes);
+      if (ano)     anos.add(ano);
+      if (unidade) unidades.add(unidade);
+      if (r[7])    origens.add(String(r[7]).trim());
+
+      rows.push({
+        rowIndex:          i + 1,
+        timestamp:         _fmtDate(r[0]),
+        emailSecretaria:   String(r[1]  || ''),
+        unidade,
+        mes,
+        ano,
+        nome:              String(r[5]  || ''),
+        percentual:        r[6]  !== '' ? r[6]  : '',
+        origemBolsa:       String(r[7]  || ''),
+        data1aAula:        _fmtDate(r[8]),
+        book:              String(r[9]  || ''),
+        frequencia:        String(r[10] || ''),
+        dataInicioBook:    _fmtDate(r[11]),
+        dataPrevConclusao: _fmtDate(r[12]),
+        horario:           String(r[13] || ''),
+        diasPrevistos:     r[14] !== '' ? r[14] : '',
+        diasAssistidos:    r[15] !== '' ? r[15] : '',
+        valor:             r[16] !== '' ? r[16] : '',
+        mt:                r[17] !== '' ? r[17] : '',
+        wt:                r[18] !== '' ? r[18] : '',
+        oc:                r[19] !== '' ? r[19] : '',
+        ot:                r[20] !== '' ? r[20] : '',
+        aproveitamento:    String(r[21] || ''),
+        observacoes:       String(r[22] || ''),
+        turma:             String(r[23] || ''),
+        chavePDF:          String(r[24] || ''),
+        obsExtrasEmail:    String(r[27] || ''),
+      });
+    }
+
+    const result = JSON.stringify({
+      ok:       true,
+      rows,
+      anos:     [...anos].sort().reverse(),
+      meses:    [...meses],
+      unidades: [...unidades].sort(),
+      origens:  [...origens].sort(),
+    });
+
+    // Cacheia por 5 min (ignora se payload for grande demais — limite 100KB)
+    try { cache.put(dataKey, result, 300); } catch(e) {}
+
+    return result;
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
+}
+
 // ─── Leitura de dados ────────────────────────────────────────
 function getBolsistasData(token, paramsJson) {
   try {
@@ -101,6 +215,7 @@ function getBolsistasData(token, paramsJson) {
 
     const norm = s => String(s || '').trim().toLowerCase()
       .normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const _inArr = (v, a) => !a || !a.length || (Array.isArray(a) ? a : [a]).map(norm).includes(norm(String(v)));
 
     // Unidades permitidas para o usuário
     const userUnidades = (user.isAdmin || !user.unidade)
@@ -117,10 +232,10 @@ function getBolsistasData(token, paramsJson) {
       if (!unidade && !mes) continue;
 
       if (userUnidades && !userUnidades.includes(norm(unidade))) continue;
-      if (params.mes        && norm(mes)               !== norm(params.mes))         continue;
-      if (params.ano        && String(ano)              !== String(params.ano))        continue;
-      if (params.unidade    && norm(unidade)            !== norm(params.unidade))      continue;
-      if (params.origemBolsa && norm(String(r[7]||'')) !== norm(params.origemBolsa)) continue;
+      if (!_inArr(mes,               params.mes))         continue;
+      if (!_inArr(ano,               params.ano))         continue;
+      if (!_inArr(unidade,           params.unidade))     continue;
+      if (!_inArr(String(r[7]||''), params.origemBolsa)) continue;
       if (params.busca) {
         const q = norm(params.busca);
         if (!norm(String(r[5]||'')).includes(q) && !norm(String(r[23]||'')).includes(q)) continue;
@@ -212,16 +327,30 @@ function updateBolsista(token, payloadJson) {
 
     const { rowIndex, field, value } = JSON.parse(payloadJson);
 
-    // col indexes são 1-based
     const FIELD_COL = {
-      diasAssistidos: 16, // P
-      mt:             18, // R
-      wt:             19, // S
-      oc:             20, // T
-      ot:             21, // U
-      aproveitamento: 22, // V
-      observacoes:    23, // W
-      obsExtrasEmail: 28, // AB
+      unidade:           3,
+      mes:               4,
+      ano:               5,
+      nome:              6,
+      percentual:        7,
+      origemBolsa:       8,
+      data1aAula:        9,
+      book:              10,
+      frequencia:        11,
+      dataInicioBook:    12,
+      dataPrevConclusao: 13,
+      horario:           14,
+      diasPrevistos:     15,
+      diasAssistidos:    16,
+      valor:             17,
+      mt:                18,
+      wt:                19,
+      oc:                20,
+      ot:                21,
+      aproveitamento:    22,
+      observacoes:       23,
+      turma:             24,
+      obsExtrasEmail:    28,
     };
 
     const col = FIELD_COL[field];
@@ -244,6 +373,9 @@ function updateBolsista(token, payloadJson) {
     sheet.getRange(rowIndex, col).setValue(value);
     sheet.getRange(rowIndex, 1).setValue(new Date());
     sheet.getRange(rowIndex, 2).setValue(user.email);
+
+    // Invalida cache de dados para que o próximo carregamento reflita a edição
+    try { CacheService.getScriptCache().remove('appdata_' + token); } catch(e) {}
 
     return JSON.stringify({ ok: true });
   } catch (e) {
