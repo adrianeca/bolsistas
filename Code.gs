@@ -646,67 +646,147 @@ function gerarPDF(token, chavePDF) {
       }
     }
 
-    // Cria Google Doc
+    // ── Cria Google Doc ──
     const docTitle = `Relatório Bolsistas — ${chavePDF}`;
-    const doc      = DocumentApp.create(docTitle);
-    const body     = doc.getBody();
+    const doc  = DocumentApp.create(docTitle);
+    const body = doc.getBody();
     body.clear();
 
-    // Configuração de página
-    body.setPageWidth(794).setPageHeight(1123); // A4 aproximado em pontos
-    body.setMarginTop(36).setMarginBottom(36).setMarginLeft(36).setMarginRight(36);
+    // A4, margens estreitas (pontos)
+    body.setPageWidth(794).setPageHeight(1123);
+    body.setMarginTop(28).setMarginBottom(28).setMarginLeft(28).setMarginRight(28);
 
-    // Cabeçalho
-    const titlePara = body.appendParagraph(`Relatório de Bolsistas — ${origemBolsa}`);
-    titlePara.setHeading(DocumentApp.ParagraphHeading.HEADING1).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    // ── 1. Cabeçalho (tabela 3 colunas) ──
+    const hdrTbl = body.appendTable([['', '', '']]);
+    hdrTbl.setBorderWidth(0);
 
-    const subPara = body.appendParagraph(`${mes} — ${ano}`);
-    subPara.setHeading(DocumentApp.ParagraphHeading.HEADING2).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    // Coluna esq: BRASAS
+    const cB = hdrTbl.getCell(0, 0);
+    cB.getParagraphs()[0].setText('BRASAS');
+    cB.getParagraphs()[0].editAsText().setBold(true).setFontSize(12).setForegroundColor('#1d3557');
+    cB.appendParagraph('ENGLISH COURSE').editAsText().setBold(false).setFontSize(6).setForegroundColor('#4a6fa5');
+
+    // Coluna central: título
+    const cT = hdrTbl.getCell(0, 1);
+    cT.getParagraphs()[0].setText(`Relatório de Bolsistas - ${origemBolsa}`);
+    cT.editAsText().setBold(true).setFontSize(11).setForegroundColor('#1d3557');
+    cT.setHorizontalAlignment(DocumentApp.HorizontalAlignment.CENTER);
+
+    // Coluna dir: logo da empresa
+    const cL = hdrTbl.getCell(0, 2);
+    cL.setHorizontalAlignment(DocumentApp.HorizontalAlignment.RIGHT);
+    if (logo) {
+      try {
+        const imgPara = cL.getParagraphs()[0];
+        imgPara.setText('');
+        imgPara.appendInlineImage(DriveApp.getFileById(logo).getBlob());
+      } catch(eL) {
+        cL.getParagraphs()[0].setText(origemBolsa);
+        cL.editAsText().setFontSize(9).setForegroundColor('#64748b');
+      }
+    } else {
+      cL.getParagraphs()[0].setText(origemBolsa);
+      cL.editAsText().setFontSize(9).setForegroundColor('#64748b');
+    }
+
+    // ── 2. Subtítulo centralizado ──
+    body.appendParagraph('');
+    const subP = body.appendParagraph(`${mes} - ${ano}`);
+    subP.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    subP.editAsText().setBold(true).setFontSize(14).setForegroundColor('#1d3557');
+    body.appendParagraph('');
+
+    // ── 3. Legenda (tabela 2 colunas, sem borda) ──
+    const legTbl = body.appendTable([['Legenda:', 'Conceito:'], ['', '']]);
+    legTbl.setBorderWidth(0);
+
+    legTbl.getCell(0, 0).editAsText().setBold(true).setFontSize(8).setForegroundColor('#1d3557');
+    legTbl.getCell(0, 1).editAsText().setBold(true).setFontSize(8).setForegroundColor('#1d3557');
+
+    const lc0 = legTbl.getCell(1, 0);
+    lc0.getParagraphs()[0].setText('MT - Midterm Test - Prova realizada na metade do módulo');
+    lc0.appendParagraph('WT - Written Test - Prova escrita');
+    lc0.appendParagraph('OC - Oral Comprehension - Prova de compreensão oral');
+    lc0.appendParagraph('OT - Oral Test - Prova Oral');
+    lc0.getParagraphs().forEach(p => p.editAsText().setFontSize(8).setForegroundColor('#334155'));
+
+    const lc1 = legTbl.getCell(1, 1);
+    lc1.getParagraphs()[0].setText('E - Excelente');
+    lc1.appendParagraph('MB - Muito Bom');
+    lc1.appendParagraph('B - Bom');
+    lc1.appendParagraph('R - Regular');
+    lc1.appendParagraph('I - Insuficiente');
+    lc1.appendParagraph('N - Nulo');
+    lc1.getParagraphs().forEach(p => p.editAsText().setFontSize(8).setForegroundColor('#334155'));
 
     body.appendParagraph('');
 
-    // Tabela
+    // ── 4. Tabela de dados (18 colunas) ──
     const hdrs = [
-      'Unidade — Nome', 'Origem da Bolsa', '% Bolsa', 'Book',
-      'Frequência — Horário', 'Dias Prev.', 'Dias Assist.',
-      'Data 1ª Aula', 'Início Book', 'Prev. Conclusão',
-      'Valor', 'MT', 'WT', 'OC', 'OT', 'Aproveitamento', 'Observações',
+      'Unidade - Nome', 'Origem da Bolsa', '% Bolsa', 'Book',
+      'Frequência - Horário', 'Dias Prev. no Mês', 'Dias Assist. no mês',
+      'Data 1ª aula', 'Data início do Book', 'Data prev. conclusão',
+      'Valor da Mensalidade', 'MT', 'WT', 'OC', 'OT',
+      'Nota', 'Aproveitamento', 'Observações',
     ];
 
     const tableData = [hdrs];
     rows.forEach(r => {
+      const wt  = parseFloat(r[18]), oc = parseFloat(r[19]), ot = parseFloat(r[20]);
+      const mt  = parseFloat(r[17]);
+      let nota  = '';
+      if (!isNaN(wt) && !isNaN(oc) && !isNaN(ot)) nota = ((wt + oc + ot) / 3).toFixed(1);
+      else if (!isNaN(mt)) nota = Number(mt).toFixed(1);
+
+      const notaN = parseFloat(nota);
+      const dias  = parseFloat(r[15]);
+      let aprov   = String(r[21] || '');
+      if (nota !== '') {
+        if (!isNaN(dias) && dias <= 1) aprov = 'N';
+        else if (notaN >= 90) aprov = 'E';
+        else if (notaN >= 80) aprov = 'MB';
+        else if (notaN >= 70) aprov = 'B';
+        else if (notaN >= 60) aprov = 'R';
+        else aprov = 'I';
+      }
+
       tableData.push([
-        `${r[2]} — ${r[5]}`,
+        `${r[2]} - ${r[5]}`,
         String(r[7]  || ''),
-        r[6] !== '' ? r[6] + '%' : '',
+        r[6]  !== '' ? String(r[6])  + '%' : '',
         String(r[9]  || ''),
-        `${r[10] || ''} — ${r[13] || ''}`,
-        String(r[14] || ''),
-        String(r[15] || ''),
+        `${r[10] || ''} - ${r[13] || ''}`,
+        r[14] !== '' ? String(r[14]) : '',
+        r[15] !== '' ? String(r[15]) : '',
         _fmtDate(r[8]),
         _fmtDate(r[11]),
         _fmtDate(r[12]),
         r[16] !== '' ? 'R$ ' + r[16] : '',
-        String(r[17] || ''),
-        String(r[18] || ''),
-        String(r[19] || ''),
-        String(r[20] || ''),
-        String(r[21] || ''),
+        r[17] !== '' ? String(r[17]) : '',
+        r[18] !== '' ? String(r[18]) : '',
+        r[19] !== '' ? String(r[19]) : '',
+        r[20] !== '' ? String(r[20]) : '',
+        nota,
+        aprov,
         String(r[22] || ''),
       ]);
     });
 
     const table = body.appendTable(tableData);
     table.setBorderWidth(0.5);
-    const headerRow = table.getRow(0);
+
+    // Header: navy, branco, negrito
+    const hRow = table.getRow(0);
     for (let c = 0; c < hdrs.length; c++) {
-      headerRow.getCell(c).setBackgroundColor('#0F2035')
-        .editAsText().setForegroundColor('#FFFFFF').setBold(true).setFontSize(8);
+      hRow.getCell(c).setBackgroundColor('#1d3557')
+        .editAsText().setForegroundColor('#FFFFFF').setBold(true).setFontSize(7);
     }
+    // Linhas de dados: font 8, zebra azul claro
     for (let r = 1; r < table.getNumRows(); r++) {
       for (let c = 0; c < hdrs.length; c++) {
-        table.getCell(r, c).editAsText().setFontSize(8);
-        if (r % 2 === 0) table.getCell(r, c).setBackgroundColor('#F1F5F9');
+        const cell = table.getCell(r, c);
+        cell.editAsText().setFontSize(8);
+        if (r % 2 === 0) cell.setBackgroundColor('#dce6f1');
       }
     }
 
@@ -788,14 +868,15 @@ function enviarEmail(token, payloadJson) {
       attachments.push(DriveApp.getFileById(fileId).getAs('application/pdf'));
     }
 
-    const subject  = `Relatório de Bolsistas — ${origemBolsa} — ${mes} ${ano}`;
+    const subject  = `Relatório de Frequência e Aproveitamento - BRASAS - ${origemBolsa}`;
     const htmlBody = _buildEmailHtml(origemBolsa, mes, ano, rows, obsExtra);
 
     GmailApp.sendEmail(to, subject, '', {
       htmlBody,
       cc:          cc || undefined,
       attachments,
-      name:        'BRASAS Bolsistas',
+      name:        'Administrativo BRASAS',
+      replyTo:     'administrativo@brasas.com',
     });
 
     // Marca envio nas linhas (col AA = index 27)
@@ -810,56 +891,71 @@ function enviarEmail(token, payloadJson) {
 }
 
 function _buildEmailHtml(origemBolsa, mes, ano, rows, obsExtra) {
-  const rowsHtml = rows.map((r, idx) => `
-    <tr style="background:${idx % 2 === 0 ? '#fff' : '#f8fafc'}">
-      <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0"><b>${r[2]}</b><br><span style="color:#475569;font-size:11px">${r[5]}</span></td>
-      <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;text-align:center">${r[6] !== '' ? r[6] + '%' : ''}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;text-align:center">${r[9] || ''}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;text-align:center">${r[10] || ''}<br><span style="font-size:11px;color:#64748b">${r[13] || ''}</span></td>
-      <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;text-align:center">${r[14] !== '' ? r[14] : ''}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;text-align:center">${r[15] !== '' ? r[15] : ''}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;text-align:center">${r[17] || ''}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;text-align:center">${r[18] || ''}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;text-align:center">${r[19] || ''}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;text-align:center">${r[20] || ''}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;text-align:center"><b>${r[21] || ''}</b></td>
-      <td style="padding:7px 10px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${r[22] || ''}</td>
-    </tr>`).join('');
+  const rowsHtml = rows.map((r, idx) =>
+    `<tr style="background:${idx % 2 === 0 ? '#fff' : '#f8fafc'}">
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0"><b style="color:#1d3557">${r[2]}</b> — ${r[5]}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[6] !== '' ? r[6] + '%' : ''}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[9] || ''}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[10] || ''}${r[13] ? '<br><span style="font-size:11px;color:#64748b">' + r[13] + '</span>' : ''}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[14] !== '' ? r[14] : ''}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[15] !== '' ? r[15] : ''}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[17] || ''}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[18] || ''}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[19] || ''}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[20] || ''}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700">${r[21] || ''}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${r[22] || ''}</td>
+    </tr>`
+  ).join('');
 
-  return `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;margin:0;padding:0;background:#f1f5f9">
-  <div style="max-width:960px;margin:24px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.08)">
-    <div style="background:#0F2035;padding:28px 32px;display:flex;align-items:center;justify-content:space-between">
-      <div>
-        <h1 style="margin:0;color:#fff;font-size:20px">Relatório de Bolsistas</h1>
-        <p style="margin:6px 0 0;color:rgba(255,255,255,.7);font-size:14px">${origemBolsa}</p>
-      </div>
-      <div style="color:rgba(255,255,255,.8);font-size:14px;text-align:right">${mes}<br>${ano}</div>
+  const obsBlock = obsExtra
+    ? `<div style="margin:20px 0 0;padding:14px 18px;background:#f8fafc;border-left:3px solid #1d3557;border-radius:0 6px 6px 0;font-size:13px;color:#475569"><b>Observações:</b> ${obsExtra}</div>`
+    : '';
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,Helvetica,sans-serif;margin:0;padding:24px 16px;background:#f1f5f9">
+  <div style="max-width:960px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,.09)">
+
+    <!-- Cabeçalho -->
+    <div style="background:#1d3557;padding:24px 32px">
+      <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:5px">Relatório de Frequência e Aproveitamento</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.65)">BRASAS English Course &nbsp;·&nbsp; ${mes}/${ano}</div>
     </div>
-    <div style="overflow-x:auto">
+
+    <!-- Corpo -->
+    <div style="padding:28px 32px 24px">
+      <p style="margin:0 0 14px;font-size:14px;color:#334155">Olá!</p>
+      <p style="margin:0;font-size:14px;color:#334155;line-height:1.65">
+        Segue em anexo o <strong>Relatório de Frequência e Aproveitamento</strong> dos alunos bolsistas de
+        <strong>${origemBolsa}</strong>, referente ao mês de <strong>${mes}/${ano}</strong>.
+      </p>
+      ${obsBlock}
+    </div>
+
+    <!-- Tabela -->
+    <div style="border-top:1px solid #e2e8f0;overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead>
-          <tr style="background:#162D4A;color:#fff">
-            <th style="padding:10px;text-align:left;min-width:160px">Unidade — Nome</th>
-            <th style="padding:10px;text-align:center">% Bolsa</th>
-            <th style="padding:10px;text-align:center">Book</th>
-            <th style="padding:10px;text-align:center">Freq — Horário</th>
-            <th style="padding:10px;text-align:center">Prev.</th>
-            <th style="padding:10px;text-align:center">Assist.</th>
-            <th style="padding:10px;text-align:center">MT</th>
-            <th style="padding:10px;text-align:center">WT</th>
-            <th style="padding:10px;text-align:center">OC</th>
-            <th style="padding:10px;text-align:center">OT</th>
-            <th style="padding:10px;text-align:center">Aprov.</th>
-            <th style="padding:10px;text-align:left;min-width:200px">Observações</th>
+          <tr style="background:#1d3557;color:#fff">
+            <th style="padding:9px 12px;text-align:left;min-width:180px;font-weight:600">Unidade — Nome</th>
+            <th style="padding:9px 12px;text-align:center;font-weight:600">% Bolsa</th>
+            <th style="padding:9px 12px;text-align:center;font-weight:600">Book</th>
+            <th style="padding:9px 12px;text-align:center;font-weight:600">Freq. / Horário</th>
+            <th style="padding:9px 12px;text-align:center;font-weight:600">Dias Prev.</th>
+            <th style="padding:9px 12px;text-align:center;font-weight:600">Dias Assist.</th>
+            <th style="padding:9px 12px;text-align:center;font-weight:600">MT</th>
+            <th style="padding:9px 12px;text-align:center;font-weight:600">WT</th>
+            <th style="padding:9px 12px;text-align:center;font-weight:600">OC</th>
+            <th style="padding:9px 12px;text-align:center;font-weight:600">OT</th>
+            <th style="padding:9px 12px;text-align:center;font-weight:600">Aproveit.</th>
+            <th style="padding:9px 12px;text-align:left;min-width:180px;font-weight:600">Observações</th>
           </tr>
         </thead>
         <tbody>${rowsHtml}</tbody>
       </table>
     </div>
-    ${obsExtra ? `<div style="padding:20px 32px;border-top:1px solid #e2e8f0;font-size:13px;color:#475569"><b>Observações gerais:</b> ${obsExtra}</div>` : ''}
-    <div style="padding:16px 32px;background:#f8fafc;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0">
-      Enviado por BRASAS Analytics &bull; ${new Date().toLocaleDateString('pt-BR')} &bull; Total: ${rows.length} aluno${rows.length !== 1 ? 's' : ''}
-    </div>
+
   </div>
 </body></html>`;
 }

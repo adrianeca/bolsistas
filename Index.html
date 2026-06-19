@@ -134,16 +134,17 @@ body{font-family:var(--font);background:var(--gray-100);color:var(--gray-700);mi
 .ms-option:hover{background:var(--gray-50)}
 .ms-option input[type=checkbox]{accent-color:var(--navy-600);cursor:pointer;flex-shrink:0}
 
-/* Year sidebar */
-.table-area{display:flex;gap:16px;align-items:flex-start}
-.year-sidebar{flex-shrink:0;width:156px;background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;position:sticky;top:76px}
-.year-sidebar-title{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);padding:12px 14px 6px}
-.year-item{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px 12px;cursor:pointer;font-size:.84rem;color:var(--gray-600);border-radius:0;transition:background .1s}
-.year-item:hover{background:var(--gray-50)}
-.year-item.active{background:var(--navy-800);color:#fff;font-weight:600}
-.year-item.active .year-count{background:rgba(255,255,255,.18);color:#fff}
-.year-count{background:var(--gray-100);color:var(--gray-500);font-size:.72rem;font-weight:700;padding:1px 7px;border-radius:20px;flex-shrink:0}
-.table-wrap{flex:1;min-width:0}
+/* Tab navigation */
+.tab-bar{background:var(--navy-900);border-bottom:1px solid rgba(255,255,255,.07);padding:0 32px;display:flex}
+.tab-btn{background:none;border:none;color:rgba(255,255,255,.5);font-family:var(--font);font-size:.83rem;font-weight:600;padding:0 20px;height:40px;cursor:pointer;border-bottom:2px solid transparent;transition:color .15s;position:relative;top:1px}
+.tab-btn:hover{color:rgba(255,255,255,.8)}
+.tab-btn.active{color:#fff;border-bottom-color:var(--navy-300)}
+
+/* Zebra striping */
+tbody tr.row-even{background:#f7f9fc}
+tbody tr.row-even td:first-child{background:#f7f9fc}
+tbody tr.row-even:hover{background:var(--gray-50)}
+tbody tr.row-even:hover td:first-child{background:var(--gray-50)}
 
 /* Group header row */
 .group-row td{background:var(--gray-50);font-weight:600;font-size:.82rem;color:var(--navy-700);padding:8px 14px;border-top:2px solid var(--gray-200);border-bottom:1px solid var(--gray-200)}
@@ -457,21 +458,13 @@ td.editable.saving{opacity:.6;pointer-events:none}
     </div>
   </header>
 
-  <div class="app-body">
+  <nav class="tab-bar">
+    <button class="tab-btn active" data-tab="alunos" onclick="switchTab('alunos')">Alunos</button>
+    <button class="tab-btn" data-tab="relatorios" onclick="switchTab('relatorios')">Relatórios</button>
+  </nav>
 
-    <!-- Admin bar -->
-    <div class="admin-bar" id="adminBar">
-      <div class="admin-bar-title">Ações administrativas</div>
-      <div class="admin-actions">
-        <button class="adm-btn cycle" id="btnCiclo" onclick="openCicloConfirm()">
-          ↺ Executar Ciclo Mensal
-        </button>
-        <button class="adm-btn pdf" id="btnPDF" onclick="openPDFModal()">
-          📄 Gerar / Enviar PDFs
-        </button>
-      </div>
-      <div class="adm-log" id="adminLog"></div>
-    </div>
+  <div class="app-body">
+  <div id="viewAlunos">
 
     <!-- Filters -->
     <div class="filters-bar">
@@ -505,7 +498,7 @@ td.editable.saving{opacity:.6;pointer-events:none}
       </div>
       <div class="filter-group">
         <label class="filter-label">Buscar aluno / turma</label>
-        <input class="filter-input" id="fBusca" type="text" placeholder="Nome ou turma…" onkeydown="if(event.key==='Enter')applyFilters()">
+        <input class="filter-input" id="fBusca" type="text" placeholder="Nome ou turma…" oninput="applyFilters()">
       </div>
       <button class="filter-btn" onclick="applyFilters()">Filtrar</button>
       <button class="filter-clear" onclick="clearFilters()">Limpar</button>
@@ -516,10 +509,6 @@ td.editable.saving{opacity:.6;pointer-events:none}
 
     <!-- Table area -->
     <div class="table-area">
-    <div class="year-sidebar" id="yearSidebar" style="display:none">
-      <div class="year-sidebar-title">Ano</div>
-      <div id="yearList"></div>
-    </div>
     <div class="table-wrap">
       <div class="table-header">
         <span class="table-header-title">Alunos Bolsistas</span>
@@ -564,6 +553,54 @@ td.editable.saving{opacity:.6;pointer-events:none}
       </div>
     </div>
     </div><!-- /table-area -->
+
+  </div><!-- /viewAlunos -->
+
+  <!-- Relatórios view -->
+  <div id="viewRelatorios" style="display:none">
+    <div class="admin-bar" id="adminBar" style="margin-bottom:20px">
+      <div class="admin-bar-title">Ações administrativas</div>
+      <div class="admin-actions">
+        <button class="adm-btn cycle" id="btnCiclo" onclick="openCicloConfirm()">
+          ↺ Executar Ciclo Mensal
+        </button>
+      </div>
+      <div class="adm-log" id="adminLog"></div>
+    </div>
+    <div class="filters-bar" style="margin-bottom:20px">
+      <div class="filter-group">
+        <label class="filter-label">Ano</label>
+        <select class="filter-select" id="rAno" onchange="buildRelatorios()" style="min-width:100px"></select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Mês</label>
+        <select class="filter-select" id="rMes" onchange="buildRelatorios()" style="min-width:130px"></select>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header">
+        <span class="table-header-title">Relatórios por Empresa</span>
+        <span class="table-header-count" id="relCount"></span>
+      </div>
+      <div class="table-scroll" style="max-height:calc(100vh - 220px)">
+        <table style="width:100%;border-collapse:collapse;font-size:.8rem">
+          <thead>
+            <tr>
+              <th style="padding:9px 14px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200)">Origem da Bolsa</th>
+              <th style="padding:9px 12px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200)">Mês</th>
+              <th style="padding:9px 12px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200)">Ano</th>
+              <th style="padding:9px 12px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200)">Unidades</th>
+              <th style="padding:9px 12px;text-align:center;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200)">Alunos</th>
+              <th style="padding:9px 12px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200)">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="relBody">
+            <tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📋</div><p>Selecione o período para ver os relatórios.</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 
   </div><!-- /app-body -->
 </div><!-- /app -->
@@ -631,6 +668,17 @@ td.editable.saving{opacity:.6;pointer-events:none}
   </div>
 </div>
 
+<!-- Modal: Prévia do Relatório -->
+<div class="modal-overlay" id="previewModal">
+  <div class="modal-card" style="max-width:96vw;width:1100px;padding:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="modal-title" id="previewTitle" style="margin-bottom:0">Prévia do Relatório</div>
+      <button class="modal-cancel" onclick="closeModal('previewModal')">Fechar</button>
+    </div>
+    <div id="previewBody" style="max-height:75vh;overflow:auto;border:1px solid var(--gray-200);border-radius:8px;background:#f8fafc"></div>
+  </div>
+</div>
+
 <!-- Modal: Enviar E-mail -->
 <div class="modal-overlay" id="emailModal">
   <div class="modal-card" style="max-width:520px">
@@ -661,7 +709,6 @@ const PAGE_SIZE = 50;
 let SORT_FIELD = '';
 let SORT_DIR = 1;
 let FULL_ROWS = [];
-let YEAR_FILTER = 'all';
 const MES_ORDER = {janeiro:1,fevereiro:2,'março':3,marco:3,abril:4,maio:5,junho:6,julho:7,agosto:8,setembro:9,outubro:10,novembro:11,dezembro:12};
 
 // ─── Boot (2 fases) ──────────────────────────────────────────
@@ -683,7 +730,7 @@ function onSessionValidated(jsonStr) {
   document.getElementById('userChipName').textContent = USER.nome;
   document.getElementById('userChipRole').textContent = USER.role;
 
-  if (USER.isAdmin || USER.canSendEmail) {
+  if (USER.isAdmin) {
     document.getElementById('adminBar').classList.add('visible');
   }
   if (!USER.isAdmin) {
@@ -724,7 +771,6 @@ function onAppData(jsonStr) {
 
   FULL_ROWS   = res.rows;
   ALL_ROWS    = res.rows;
-  YEAR_FILTER = 'all';
 
   renderTable(ALL_ROWS);
 }
@@ -746,7 +792,7 @@ function toggleMS(id) {
 function buildMS(id, values) {
   const panel = document.querySelector(`#${id} .ms-panel`);
   panel.innerHTML = (values || []).map(v =>
-    `<label class="ms-option"><input type="checkbox" value="${_ea(v)}" onchange="updateMSLabel('${id}')">${esc(v)}</label>`
+    `<label class="ms-option"><input type="checkbox" value="${_ea(v)}" onchange="updateMSLabel('${id}');applyFilters()">${esc(v)}</label>`
   ).join('');
   updateMSLabel(id);
 }
@@ -791,7 +837,6 @@ function applyFilters() {
     return true;
   });
 
-  YEAR_FILTER = 'all';
   renderTable(ALL_ROWS);
 }
 
@@ -802,7 +847,6 @@ function clearFilters() {
   });
   document.getElementById('fBusca').value = '';
   ALL_ROWS    = FULL_ROWS;
-  YEAR_FILTER = 'all';
   renderTable(ALL_ROWS);
 }
 
@@ -865,33 +909,7 @@ function renderTable(rows) {
 
   document.getElementById('tableCount').textContent = rows.length + ' aluno' + (rows.length !== 1 ? 's' : '');
   renderStats(rows);
-  _buildYearSidebar();
   _renderCurrentPage();
-}
-
-function _buildYearSidebar() {
-  const sidebar = document.getElementById('yearSidebar');
-  const list    = document.getElementById('yearList');
-  const counts  = {};
-  for (const r of FULL_ROWS) counts[r.ano] = (counts[r.ano] || 0) + 1;
-  const years = Object.keys(counts).sort((a, b) => b - a);
-  if (!years.length) { sidebar.style.display = 'none'; return; }
-  sidebar.style.display = '';
-  list.innerHTML =
-    `<div class="year-item ${YEAR_FILTER === 'all' ? 'active' : ''}" onclick="setYearFilter('all')">
-      <span>Todos</span><span class="year-count">${FULL_ROWS.length}</span>
-    </div>` +
-    years.map(y =>
-      `<div class="year-item ${YEAR_FILTER === String(y) ? 'active' : ''}" onclick="setYearFilter('${y}')">
-        <span>${y}</span><span class="year-count">${counts[y]}</span>
-      </div>`
-    ).join('');
-}
-
-function setYearFilter(year) {
-  YEAR_FILTER = String(year);
-  ALL_ROWS = year === 'all' ? FULL_ROWS : FULL_ROWS.filter(r => String(r.ano) === String(year));
-  renderTable(ALL_ROWS);
 }
 
 // ─── Detail panel ────────────────────────────────────────────
@@ -1064,6 +1082,8 @@ function _renderCurrentPage() {
       ${eTextCell(r,'observacoes',canEdit)}
     </tr>`;
   }).join('');
+
+  tbody.querySelectorAll('tr:not(.group-row)').forEach((tr,i) => { if(i%2===1) tr.classList.add('row-even'); });
 
   const pagBar = document.getElementById('paginationBar');
   if (ALL_ROWS.length > PAGE_SIZE) {
@@ -1494,6 +1514,202 @@ function toast(msg, ok) {
 
 function esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.getElementById('viewAlunos').style.display     = tab === 'alunos'     ? '' : 'none';
+  document.getElementById('viewRelatorios').style.display = tab === 'relatorios' ? '' : 'none';
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  if (tab === 'relatorios') initRelatorios();
+}
+
+// ─── Relatórios ───────────────────────────────────────────────
+function initRelatorios() {
+  const anos  = [...new Set(FULL_ROWS.map(r => String(r.ano)).filter(Boolean))].sort().reverse();
+  const meses = [...new Set(FULL_ROWS.map(r => String(r.mes)).filter(Boolean))];
+  meses.sort((a,b) => (MES_ORDER[String(a).toLowerCase()]||99) - (MES_ORDER[String(b).toLowerCase()]||99));
+  const selAno = document.getElementById('rAno');
+  if (selAno.options.length <= 1) {
+    populateSelect('rAno', anos, 'Todos');
+    populateSelect('rMes', meses, 'Todos');
+    const curYear = String(new Date().getFullYear());
+    if (anos.includes(curYear)) selAno.value = curYear;
+  }
+  buildRelatorios();
+}
+
+function buildRelatorios() {
+  const ano = document.getElementById('rAno').value;
+  const mes = document.getElementById('rMes').value;
+  const filtered = FULL_ROWS.filter(r => (!ano || String(r.ano) === ano) && (!mes || String(r.mes) === mes));
+  const groups = {};
+  for (const r of filtered) {
+    const c = r.chavePDF;
+    if (!c) continue;
+    if (!groups[c]) groups[c] = { rows:[], unidades: new Set() };
+    groups[c].rows.push(r);
+    if (r.unidade) groups[c].unidades.add(r.unidade);
+  }
+  const entries = Object.entries(groups);
+  document.getElementById('relCount').textContent = entries.length + ' empresa' + (entries.length !== 1 ? 's' : '');
+  const tbody = document.getElementById('relBody');
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📋</div><p>Nenhuma empresa encontrada para este período.</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(([chave, info], idx) => {
+    const parts   = chave.split(' - ');
+    const label   = parts.slice(2).join(' - ') || chave;
+    const mesLbl  = parts[1] || '—';
+    const anoLbl  = parts[0] || '—';
+    const unids   = [...info.unidades].join(', ') || '—';
+    const count   = info.rows.length;
+    const safeId  = btoa(unescape(encodeURIComponent(chave))).replace(/=/g,'');
+    const hasPDF  = !!_currentPDFFiles[chave];
+    const canMail = USER && USER.canSendEmail ? '' : 'disabled';
+    const bg      = idx%2===1 ? 'background:#f7f9fc' : '';
+    return '<tr style="border-bottom:1px solid var(--gray-100);' + bg + '">' +
+      '<td style="padding:9px 14px;font-weight:600;color:var(--navy-800)">' + esc(label) + '</td>' +
+      '<td style="padding:9px 12px">' + esc(mesLbl) + '</td>' +
+      '<td style="padding:9px 12px">' + esc(anoLbl) + '</td>' +
+      '<td style="padding:9px 12px;font-size:.78rem;color:var(--gray-500)">' + esc(unids) + '</td>' +
+      '<td style="padding:9px 12px;text-align:center"><strong>' + count + '</strong></td>' +
+      '<td style="padding:9px 12px"><div style="display:flex;gap:6px;flex-wrap:wrap">' +
+        '<button class="chave-btn gen" onclick="openPreview(\'' + _ea(chave) + '\')">👁 Prévia</button>' +
+        '<button class="chave-btn gen" id="rgen-' + safeId + '" onclick="gerarPDFRel(\'' + _ea(chave) + '\',\'' + safeId + '\',this)">📄 PDF</button>' +
+        '<a class="chave-btn view" id="rview-' + safeId + '" href="' + (hasPDF ? _currentPDFFiles[chave].viewUrl : '#') + '" target="_blank" style="' + (hasPDF ? '' : 'display:none') + '">👁 Ver</a>' +
+        '<button class="chave-btn mail" ' + canMail + ' onclick="openEmailModal(\'' + _ea(chave) + '\',this)">📧 Enviar</button>' +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function gerarPDFRel(chavePDF, safeId, btn) {
+  btn.disabled = true; btn.textContent = 'Gerando…';
+  google.script.run
+    .withSuccessHandler(res => {
+      const d = JSON.parse(res);
+      btn.disabled = false; btn.textContent = '🔄 PDF';
+      if (!d.ok) { toast('Erro: ' + d.error, false); return; }
+      _currentPDFFiles[chavePDF] = { fileId: d.fileId, viewUrl: d.viewUrl };
+      const viewEl = document.getElementById('rview-' + safeId);
+      if (viewEl) { viewEl.href = d.viewUrl; viewEl.style.display = ''; }
+      toast('PDF gerado: ' + d.totalAlunos + ' alunos', true);
+    })
+    .withFailureHandler(err => { btn.disabled = false; btn.textContent = '📄 PDF'; toast('Erro: ' + (err.message||err), false); })
+    .gerarPDF(TOKEN, chavePDF);
+}
+
+function openPreview(chavePDF) {
+  const parts   = chavePDF.split(' - ');
+  const empresa = parts.slice(2).join(' - ') || chavePDF;
+  const mesPrev = parts[1] || '';
+  const anoPrev = parts[0] || '';
+  document.getElementById('previewTitle').textContent = 'Previa - ' + empresa;
+
+  const rows = FULL_ROWS.filter(r => r.chavePDF === chavePDF);
+  if (!rows.length) {
+    document.getElementById('previewBody').innerHTML = '<p style="color:var(--gray-400);padding:20px 0;text-align:center">Nenhum aluno encontrado.</p>';
+    openModal('previewModal'); return;
+  }
+
+  const hdrs = [
+    {l:'Unidade - Nome',w:'150px'},{l:'Origem da Bolsa',w:'90px'},{l:'% Bolsa',w:'50px'},
+    {l:'Book',w:'68px'},{l:'Frequencia - Horario',w:'88px'},
+    {l:'Dias Previstos no Mes',w:'55px'},{l:'Dias Assistidos no mes',w:'55px'},
+    {l:'Data 1a aula',w:'68px'},{l:'Data de inicio do Book',w:'68px'},
+    {l:'Data prevista para concluir o Book',w:'78px'},{l:'Valor da Mensalidade',w:'68px'},
+    {l:'MT',w:'32px'},{l:'WT',w:'32px'},{l:'OC',w:'32px'},{l:'OT',w:'32px'},
+    {l:'Nota',w:'42px'},{l:'Aproveitamento',w:'70px'},{l:'Observacoes',w:'130px'},
+  ];
+
+  const TH = 'background:#1d3557;color:#fff;font-weight:700;font-size:.6rem;padding:6px 5px;text-align:center;border:1px solid #2a4d76;vertical-align:middle;word-break:break-word;white-space:normal';
+  const TD = 'padding:5px 5px;font-size:.68rem;color:#334155;border:1px solid #c9d4e0;vertical-align:middle;text-align:center';
+  const TE = 'padding:5px 5px;font-size:.68rem;color:#334155;border:1px solid #c9d4e0;background:#dce6f1;vertical-align:middle;text-align:center';
+  const TDL = TD + ';text-align:left';
+  const TEL = TE + ';text-align:left';
+
+  const hRow = '<tr>' + hdrs.map(function(h){ return '<th style="' + TH + ';width:' + h.w + '">' + esc(h.l) + '</th>'; }).join('') + '</tr>';
+
+  const dRows = rows.map(function(r, i) {
+    var nota  = r._nota || calcNota(r) || '';
+    var aprov = r._aprovAjustado || r.aproveitamento || '';
+    var obs   = [r.observacoes, r.obsExtrasEmail].filter(Boolean).join(' | ');
+    var td = i%2===0 ? TD : TE;
+    var tdl = i%2===0 ? TDL : TEL;
+    var vals = [
+      '<span style="font-weight:600">' + esc(r.unidade||'') + '</span> - ' + esc(r.nome||''),
+      esc(r.origemBolsa||''),
+      r.percentual !== '' ? r.percentual + '%' : '',
+      esc(r.book||''),
+      esc((r.frequencia||'') + (r.horario ? ' - ' + r.horario : '')),
+      r.diasPrevistos  !== '' ? r.diasPrevistos  : '',
+      r.diasAssistidos !== '' ? r.diasAssistidos : '',
+      esc(r.data1aAula||''), esc(r.dataInicioBook||''), esc(r.dataPrevConclusao||''),
+      r.valor !== '' ? 'R$ ' + r.valor : '',
+      r.mt!==''?r.mt:'', r.wt!==''?r.wt:'', r.oc!==''?r.oc:'', r.ot!==''?r.ot:'',
+      nota, aprov, esc(obs),
+    ];
+    return '<tr>' +
+      '<td style="' + tdl + '">' + vals[0] + '</td>' +
+      vals.slice(1, 16).map(function(v){ return '<td style="' + td + '">' + v + '</td>'; }).join('') +
+      '<td style="' + tdl + '">' + vals[16] + '</td>' +
+      '<td style="' + tdl + '">' + vals[17] + '</td>' +
+    '</tr>';
+  }).join('');
+
+  var logoBlock =
+    '<div style="line-height:1.1">' +
+      '<div style="font-size:1rem;font-weight:900;color:#1d3557;letter-spacing:-.01em">BRASAS</div>' +
+      '<div style="font-size:.55rem;letter-spacing:.1em;color:#4a6fa5;font-weight:700">ENGLISH COURSE</div>' +
+      '<div style="margin-top:4px;height:3px;width:52px;background:linear-gradient(90deg,#c0392b 33%,#fff 33% 66%,#2472b8 66%)"></div>' +
+    '</div>';
+
+  var html =
+    '<div style="background:#fff;padding:36px 32px;font-family:Arial,Helvetica,sans-serif">' +
+
+    '<table style="width:100%;border-collapse:collapse;margin-bottom:24px"><tr>' +
+      '<td style="width:130px;vertical-align:top">' + logoBlock + '</td>' +
+      '<td style="text-align:center;vertical-align:middle;padding:0 12px">' +
+        '<span style="font-size:.88rem;font-weight:700;color:#1d3557">Relatorio de Bolsistas - ' + esc(empresa) + '</span>' +
+      '</td>' +
+      '<td style="width:130px;text-align:right;vertical-align:top">' +
+        '<div style="display:inline-block;border:1px dashed #c9d4e0;border-radius:4px;padding:6px 10px;font-size:.65rem;color:#94a3b8">Logo ' + esc(empresa) + '</div>' +
+      '</td>' +
+    '</tr></table>' +
+
+    '<p style="text-align:center;font-size:1.05rem;font-weight:700;color:#1d3557;margin-bottom:22px">' +
+      esc(mesPrev) + ' - ' + esc(anoPrev) +
+    '</p>' +
+
+    '<table style="width:60%;margin:0 auto 24px;border-collapse:collapse"><tr>' +
+      '<td style="vertical-align:top;padding-right:28px;font-size:.72rem;line-height:1.85;color:#334155">' +
+        '<strong>Legenda:</strong><br>' +
+        'MT - Midterm Test - Prova realizada na metade do modulo<br>' +
+        'WT - Written Test - Prova escrita<br>' +
+        'OC - Oral Comprehension - Prova de compreensao oral<br>' +
+        'OT - Oral Test - Prova Oral' +
+      '</td>' +
+      '<td style="vertical-align:top;font-size:.72rem;line-height:1.85;color:#334155">' +
+        '<strong>Conceito:</strong><br>' +
+        'E - Excelente<br>MB - Muito Bom<br>B - Bom<br>R - Regular<br>I - Insuficiente<br>N - Nulo' +
+      '</td>' +
+    '</tr></table>' +
+
+    '<div style="overflow-x:auto">' +
+      '<table style="border-collapse:collapse;border:1px solid #b0bec5;min-width:100%">' +
+        '<thead>' + hRow + '</thead>' +
+        '<tbody>' + dRows + '</tbody>' +
+      '</table>' +
+    '</div>' +
+    '<p style="margin-top:12px;font-size:.65rem;color:#94a3b8;text-align:right">' +
+      rows.length + ' aluno' + (rows.length!==1?'s':'') + ' &middot; previa gerada em ' + new Date().toLocaleDateString('pt-BR') +
+    '</p>' +
+    '</div>';
+
+  document.getElementById('previewBody').innerHTML = html;
+  openModal('previewModal');
 }
 </script>
 </body>
