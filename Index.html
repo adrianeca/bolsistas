@@ -20,7 +20,7 @@
   --radius:10px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{font-size:14px}
+html{font-size:15px}
 body{font-family:var(--font);background:var(--gray-100);color:var(--gray-700);min-height:100vh}
 
 /* ── Loading ── */
@@ -85,6 +85,7 @@ body{font-family:var(--font);background:var(--gray-100);color:var(--gray-700);mi
 .filters-bar{
   background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius);
   padding:16px 20px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:20px;
+  position:sticky;top:101px;z-index:90;box-shadow:0 2px 8px rgba(0,0,0,.06);
 }
 .filter-group{display:flex;flex-direction:column;gap:4px}
 .filter-label{font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400)}
@@ -135,7 +136,7 @@ body{font-family:var(--font);background:var(--gray-100);color:var(--gray-700);mi
 .ms-option input[type=checkbox]{accent-color:var(--navy-600);cursor:pointer;flex-shrink:0}
 
 /* Tab navigation */
-.tab-bar{background:var(--navy-900);border-bottom:1px solid rgba(255,255,255,.07);padding:0 32px;display:flex}
+.tab-bar{background:var(--navy-900);border-bottom:1px solid rgba(255,255,255,.07);padding:0 32px;display:flex;position:sticky;top:60px;z-index:99}
 .tab-btn{background:none;border:none;color:rgba(255,255,255,.5);font-family:var(--font);font-size:.83rem;font-weight:600;padding:0 20px;height:40px;cursor:pointer;border-bottom:2px solid transparent;transition:color .15s;position:relative;top:1px}
 .tab-btn:hover{color:rgba(255,255,255,.8)}
 .tab-btn.active{color:#fff;border-bottom-color:var(--navy-300)}
@@ -257,14 +258,15 @@ thead th.sort-desc::after{content:' ▼';font-size:.55rem;color:var(--navy-400);
 .page-btn:hover:not(:disabled){background:var(--gray-100)}
 .page-btn:disabled{opacity:.4;cursor:not-allowed}
 .page-info{font-size:.8rem;color:var(--gray-500)}
-table{width:100%;border-collapse:collapse;font-size:.8rem}
+table{width:100%;border-collapse:collapse;font-size:.83rem}
 thead th{
   padding:9px 12px;text-align:left;font-size:.67rem;font-weight:700;
   text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);
   background:var(--gray-50);border-bottom:1px solid var(--gray-200);
   white-space:nowrap;position:sticky;top:0;
 }
-thead th.editable-col{color:var(--navy-500)}
+thead th.editable-col{color:#92400e;background:#fff3cd;border-top:2px solid #f59e0b}
+thead th.editable-col.sortable:hover{background:#fde68a}
 tbody tr{border-bottom:1px solid var(--gray-100);transition:background .1s}
 tbody tr:hover{background:var(--gray-50)}
 tbody tr:last-child{border-bottom:none}
@@ -500,6 +502,16 @@ td.editable.saving{opacity:.6;pointer-events:none}
         <label class="filter-label">Buscar aluno / turma</label>
         <input class="filter-input" id="fBusca" type="text" placeholder="Nome ou turma…" oninput="applyFilters()">
       </div>
+      <div class="filter-group">
+        <label class="filter-label">% Faltas no Módulo</label>
+        <select class="filter-select" id="fPctFaltas" onchange="applyFilters()" style="min-width:120px">
+          <option value="">Todos</option>
+          <option value="10">&gt;10%</option>
+          <option value="20">&gt;20%</option>
+          <option value="30">&gt;30%</option>
+          <option value="50">&gt;50%</option>
+        </select>
+      </div>
       <button class="filter-btn" onclick="applyFilters()">Filtrar</button>
       <button class="filter-clear" onclick="clearFilters()">Limpar</button>
     </div>
@@ -520,29 +532,39 @@ td.editable.saving{opacity:.6;pointer-events:none}
             <tr>
               <th class="sortable" data-sort="nome" onclick="sortBy(this.dataset.sort)" style="min-width:160px">Nome do Aluno</th>
               <th class="sortable" data-sort="unidade" onclick="sortBy(this.dataset.sort)">Unidade</th>
+              <th class="sortable editable-col" data-sort="statusAluno" onclick="sortBy(this.dataset.sort)">Status</th>
               <th class="sortable" data-sort="mes" onclick="sortBy(this.dataset.sort)">Mês</th>
               <th class="sortable" data-sort="ano" onclick="sortBy(this.dataset.sort)">Ano</th>
               <th class="sortable" data-sort="percentual" onclick="sortBy(this.dataset.sort)">% Bolsa</th>
               <th class="sortable" data-sort="origemBolsa" onclick="sortBy(this.dataset.sort)">Origem da Bolsa</th>
-              <th class="sortable" data-sort="data1aAula" onclick="sortBy(this.dataset.sort)">Data 1ª Aula</th>
-              <th class="sortable" data-sort="book" onclick="sortBy(this.dataset.sort)">Book</th>
-              <th class="sortable" data-sort="frequencia" onclick="sortBy(this.dataset.sort)">Frequência</th>
+              <th class="sortable editable-col" data-sort="data1aAula" onclick="sortBy(this.dataset.sort)">Data 1ª Aula</th>
+              <th class="sortable" data-sort="book" onclick="sortBy(this.dataset.sort)">Módulo</th>
+              <th class="sortable editable-col" data-sort="dataInicioBook" onclick="sortBy(this.dataset.sort)">Início do Módulo</th>
+              <th class="sortable editable-col" data-sort="frequencia" onclick="sortBy(this.dataset.sort)">Frequência</th>
+              <th class="sortable editable-col" data-sort="horario" onclick="sortBy(this.dataset.sort)">Horário</th>
               <th class="sortable" data-sort="dataPrevConclusao" onclick="sortBy(this.dataset.sort)">Prev. Conclusão</th>
-              <th class="sortable" data-sort="diasPrevistos" onclick="sortBy(this.dataset.sort)">Dias Prev.</th>
-              <th class="sortable" data-sort="diasAssistidos" onclick="sortBy(this.dataset.sort)">Dias Assist.</th>
-              <th class="sortable" data-sort="_faltados" onclick="sortBy(this.dataset.sort)">Dias Faltados</th>
+              <th class="sortable editable-col" data-sort="diasPrevistos" onclick="sortBy(this.dataset.sort)">Aulas Prev.</th>
+              <th class="sortable editable-col" data-sort="diasAssistidos" onclick="sortBy(this.dataset.sort)">Aulas Assist.</th>
+              <th class="sortable editable-col" data-sort="diasAula" onclick="sortBy(this.dataset.sort)">Dias de Aula</th>
+              <th class="sortable" data-sort="_faltadosMes" onclick="sortBy(this.dataset.sort)">Faltas/Mês</th>
+              <th class="sortable" data-sort="_faltados" onclick="sortBy(this.dataset.sort)">Faltas/Módulo</th>
+              <th class="sortable" data-sort="_pctFaltadosLivro" onclick="sortBy(this.dataset.sort)">% Faltas/Módulo</th>
               <th class="sortable" data-sort="valor" onclick="sortBy(this.dataset.sort)">Valor</th>
-              <th class="sortable" data-sort="mt" onclick="sortBy(this.dataset.sort)">MT</th>
-              <th class="sortable" data-sort="wt" onclick="sortBy(this.dataset.sort)">WT</th>
-              <th class="sortable" data-sort="oc" onclick="sortBy(this.dataset.sort)">OC</th>
-              <th class="sortable" data-sort="ot" onclick="sortBy(this.dataset.sort)">OT</th>
-              <th class="sortable" data-sort="_nota" onclick="sortBy(this.dataset.sort)">Nota</th>
-              <th class="sortable" data-sort="_aprovAjustado" onclick="sortBy(this.dataset.sort)">Aproveitamento</th>
-              <th class="sortable" data-sort="observacoes" onclick="sortBy(this.dataset.sort)">Observações</th>
+              <th class="sortable editable-col" data-sort="teste1" onclick="sortBy(this.dataset.sort)">Teste 1</th>
+              <th class="sortable editable-col" data-sort="teste2" onclick="sortBy(this.dataset.sort)">Teste 2</th>
+              <th class="sortable editable-col" data-sort="mt" onclick="sortBy(this.dataset.sort)">MT</th>
+              <th class="sortable editable-col" data-sort="wt" onclick="sortBy(this.dataset.sort)">WT</th>
+              <th class="sortable editable-col" data-sort="oc" onclick="sortBy(this.dataset.sort)">OC</th>
+              <th class="sortable editable-col" data-sort="ot" onclick="sortBy(this.dataset.sort)">OT</th>
+              <th class="sortable" data-sort="_nota" onclick="sortBy(this.dataset.sort)">Média Final</th>
+              <th class="sortable editable-col" data-sort="_aprovAjustado" onclick="sortBy(this.dataset.sort)">Conceito</th>
+              <th class="sortable editable-col" data-sort="observacoes" onclick="sortBy(this.dataset.sort)">Observações</th>
+              <th class="sortable editable-col" data-sort="dependenteUnidade" onclick="sortBy(this.dataset.sort)">Dep. Unidade</th>
+              <th class="sortable editable-col" data-sort="dependenteNome" onclick="sortBy(this.dataset.sort)">Dep. Nome</th>
             </tr>
           </thead>
           <tbody id="tableBody">
-            <tr><td colspan="21"><div class="empty-state"><div class="empty-icon">📋</div><p>Aplique filtros para carregar os dados.</p></div></td></tr>
+            <tr><td colspan="31"><div class="empty-state"><div class="empty-icon">📋</div><p>Aplique filtros para carregar os dados.</p></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -576,16 +598,40 @@ td.editable.saving{opacity:.6;pointer-events:none}
         <label class="filter-label">Mês</label>
         <select class="filter-select" id="rMes" onchange="buildRelatorios()" style="min-width:130px"></select>
       </div>
+      <div class="filter-group">
+        <label class="filter-label">Unidade</label>
+        <div class="multi-select" id="msRelUnidade" data-placeholder="Todas">
+          <div class="ms-trigger" onclick="toggleMS('msRelUnidade')"><span class="ms-label">Todas</span><span class="ms-arrow">▾</span></div>
+          <div class="ms-panel"></div>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Origem da Bolsa</label>
+        <div class="multi-select" id="msRelOrigem" data-placeholder="Todas">
+          <div class="ms-trigger" onclick="toggleMS('msRelOrigem')"><span class="ms-label">Todas</span><span class="ms-arrow">▾</span></div>
+          <div class="ms-panel"></div>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Aluno</label>
+        <input type="text" class="filter-select" id="rAluno" placeholder="Buscar nome…" oninput="buildRelatorios()" style="min-width:160px">
+      </div>
+    </div>
+    <div id="mergeBar" style="display:none;background:var(--navy-700);color:#fff;padding:10px 18px;border-radius:8px;margin-bottom:10px;display:none;align-items:center;gap:12px">
+      <span id="mergeCount" style="font-weight:600;font-size:.88rem"></span>
+      <button onclick="abrirSeletorAlunos(true)" style="padding:6px 14px;background:white;color:var(--navy-700);border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:.83rem">📄 Unir PDFs</button>
+      <button onclick="limparMerge()" style="padding:6px 12px;background:transparent;color:#cbd5e1;border:1px solid #475569;border-radius:6px;cursor:pointer;font-size:.83rem">Cancelar</button>
     </div>
     <div class="table-wrap">
       <div class="table-header">
-        <span class="table-header-title">Relatórios por Empresa</span>
+        <span class="table-header-title">Relatórios por Parceiro</span>
         <span class="table-header-count" id="relCount"></span>
       </div>
       <div class="table-scroll" style="max-height:calc(100vh - 220px)">
         <table style="width:100%;border-collapse:collapse;font-size:.8rem">
           <thead>
             <tr>
+              <th style="padding:9px 10px;text-align:center;font-size:.67rem;font-weight:700;background:var(--gray-50);border-bottom:1px solid var(--gray-200);width:36px"><input type="checkbox" id="mergeSelectAll" onchange="toggleMergeAll(this.checked)" title="Selecionar todos"></th>
               <th style="padding:9px 14px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200)">Origem da Bolsa</th>
               <th style="padding:9px 12px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200)">Mês</th>
               <th style="padding:9px 12px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200)">Ano</th>
@@ -595,7 +641,7 @@ td.editable.saving{opacity:.6;pointer-events:none}
             </tr>
           </thead>
           <tbody id="relBody">
-            <tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📋</div><p>Selecione o período para ver os relatórios.</p></div></td></tr>
+            <tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📋</div><p>Selecione o período para ver os relatórios.</p></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -710,6 +756,7 @@ let SORT_FIELD = '';
 let SORT_DIR = 1;
 let FULL_ROWS = [];
 const MES_ORDER = {janeiro:1,fevereiro:2,'março':3,marco:3,abril:4,maio:5,junho:6,julho:7,agosto:8,setembro:9,outubro:10,novembro:11,dezembro:12};
+const normMesKey = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/^\d+\s*/,'');
 
 // ─── Boot (2 fases) ──────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', boot);
@@ -741,7 +788,7 @@ function onSessionValidated(jsonStr) {
   document.getElementById('loadingScreen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   document.getElementById('tableBody').innerHTML =
-    '<tr><td colspan="21"><div class="empty-state">' +
+    '<tr><td colspan="31"><div class="empty-state">' +
     '<div class="spinner" style="width:28px;height:28px;border-width:2px;margin:0 auto 10px"></div>' +
     '<p style="color:var(--gray-400)">Carregando dados…</p></div></td></tr>';
 
@@ -750,7 +797,7 @@ function onSessionValidated(jsonStr) {
     .withSuccessHandler(onAppData)
     .withFailureHandler(err => {
       document.getElementById('tableBody').innerHTML =
-        '<tr><td colspan="21"><div class="empty-state"><p style="color:var(--danger-600)">Erro ao carregar dados: ' +
+        '<tr><td colspan="31"><div class="empty-state"><p style="color:var(--danger-600)">Erro ao carregar dados: ' +
         (err.message || err) + '</p></div></td></tr>';
     })
     .initApp(TOKEN);
@@ -760,12 +807,12 @@ function onAppData(jsonStr) {
   const res = JSON.parse(jsonStr);
   if (!res.ok) {
     document.getElementById('tableBody').innerHTML =
-      '<tr><td colspan="21"><div class="empty-state"><p style="color:var(--danger-600)">' + res.error + '</p></div></td></tr>';
+      '<tr><td colspan="31"><div class="empty-state"><p style="color:var(--danger-600)">' + res.error + '</p></div></td></tr>';
     return;
   }
 
   buildMS('msAno',     res.anos);
-  buildMS('msMes',     res.meses);
+  buildMS('msMes',     [...(res.meses||[])].sort((a,b)=>(MES_ORDER[normMesKey(a)]||99)-(MES_ORDER[normMesKey(b)]||99)));
   buildMS('msUnidade', res.unidades);
   buildMS('msOrigem',  res.origens);
 
@@ -789,10 +836,11 @@ function toggleMS(id) {
   if (!isOpen) el.classList.add('open');
 }
 
-function buildMS(id, values) {
+function buildMS(id, values, onChangeFn) {
+  const fn    = onChangeFn || 'applyFilters';
   const panel = document.querySelector(`#${id} .ms-panel`);
   panel.innerHTML = (values || []).map(v =>
-    `<label class="ms-option"><input type="checkbox" value="${_ea(v)}" onchange="updateMSLabel('${id}');applyFilters()">${esc(v)}</label>`
+    `<label class="ms-option"><input type="checkbox" value="${_ea(v)}" onchange="updateMSLabel('${id}');${fn}()">${esc(v)}</label>`
   ).join('');
   updateMSLabel(id);
 }
@@ -826,6 +874,7 @@ function applyFilters() {
   const unidade     = getMS('msUnidade');
   const origemBolsa = getMS('msOrigem');
   const busca       = document.getElementById('fBusca').value.trim();
+  const pctMin      = parseInt(document.getElementById('fPctFaltas').value || '0') || 0;
   const buscaN      = norm(busca);
 
   ALL_ROWS = FULL_ROWS.filter(r => {
@@ -834,6 +883,7 @@ function applyFilters() {
     if (!inArr(r.unidade,     unidade))     return false;
     if (!inArr(r.origemBolsa, origemBolsa)) return false;
     if (busca && !norm(r.nome).includes(buscaN) && !norm(r.turma).includes(buscaN)) return false;
+    if (pctMin > 0 && !(r._pctFaltadosLivro !== '' && Number(r._pctFaltadosLivro) > pctMin)) return false;
     return true;
   });
 
@@ -845,7 +895,8 @@ function clearFilters() {
     document.querySelectorAll(`#${id} .ms-panel input`).forEach(cb => cb.checked = false);
     updateMSLabel(id);
   });
-  document.getElementById('fBusca').value = '';
+  document.getElementById('fBusca').value    = '';
+  document.getElementById('fPctFaltas').value = '';
   ALL_ROWS    = FULL_ROWS;
   renderTable(ALL_ROWS);
 }
@@ -886,8 +937,8 @@ function renderTable(rows) {
   rows.sort((a, b) => {
     const yd = Number(b.ano) - Number(a.ano);
     if (yd !== 0) return yd;
-    const ma = MES_ORDER[String(a.mes).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')] || 0;
-    const mb = MES_ORDER[String(b.mes).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')] || 0;
+    const ma = MES_ORDER[normMesKey(a.mes)] || 0;
+    const mb = MES_ORDER[normMesKey(b.mes)] || 0;
     return mb - ma;
   });
 
@@ -902,7 +953,11 @@ function renderTable(rows) {
   }
   for (const r of rows) {
     const t = totals[bookKey(r)];
-    r._faltados      = t ? t.prev - t.assist : '';
+    r._faltados            = t ? t.prev - t.assist : '';
+    r._pctFaltadosLivro    = (t && t.prev > 0) ? Math.round((t.prev - t.assist) / t.prev * 100) : '';
+    r._faltadosMes         = (r.diasPrevistos !== '' || r.diasAssistidos !== '')
+      ? (parseFloat(r.diasPrevistos) || 0) - (parseFloat(r.diasAssistidos) || 0)
+      : '';
     r._nota          = calcNota(r);
     r._aprovAjustado = calcAprovAjustado(r);
   }
@@ -929,7 +984,10 @@ function closeDetail() {
 function _renderDetail(r) {
   const canEdit   = USER.canEdit;
   const showEmail = USER.canSendEmail;
-  const faltados  = (r._faltados !== '' && r._faltados !== undefined) ? r._faltados : '—';
+  const faltadosMes      = (r._faltadosMes          !== '' && r._faltadosMes          !== undefined) ? r._faltadosMes          : '—';
+  const faltados         = (r._faltados             !== '' && r._faltados             !== undefined) ? r._faltados             : '—';
+  const pctFaltadosLivro = (r._pctFaltadosLivro     !== '' && r._pctFaltadosLivro     !== undefined) ? r._pctFaltadosLivro + '%' : '—';
+  const isDependente     = String(r.origemBolsa || '').toLowerCase().includes('dependente brasas');
   const nota      = r._nota || '—';
 
   document.getElementById('detailName').textContent = r.nome || '—';
@@ -950,13 +1008,14 @@ function _renderDetail(r) {
       `<span class="detail-field-computed">${esc(String(val ?? '—'))}</span>` +
     `</div>`;
 
-  const dEdit = (label, field, type, cls) => {
+  const dEdit = (label, field, type, cls, selectOpts) => {
     if (!canEdit) return dRead(label, dVal(field), cls);
     const v      = String(r[field] || '');
     const rowIdx = r.rowIndex;
     const clsStr = cls ? ' ' + cls : '';
     if (type === 'select') {
-      const opts = ['E','MB','B','R','I','N',''].map(o =>
+      const choices = selectOpts || ['E','MB','B','R','I','N',''];
+      const opts = choices.map(o =>
         `<option value="${o}" ${o === v ? 'selected' : ''}>${o || '(nenhum)'}</option>`).join('');
       return `<div class="detail-field${clsStr}"><span class="detail-field-label">${label}</span>` +
         `<select class="detail-select" onchange="detailSave(${rowIdx},'${field}',this.value,'${_ea(v)}')">${opts}</select></div>`;
@@ -972,30 +1031,41 @@ function _renderDetail(r) {
   document.getElementById('detailBody').innerHTML =
     `<div class="detail-section"><div class="detail-section-title">Identificação</div><div class="detail-grid">` +
       dRead('Unidade', dVal('unidade')) +
+      dEdit('Status', 'statusAluno', 'select', null, STATUS_OPTS) +
       dRead('Origem da Bolsa', dVal('origemBolsa')) +
       dRead('% Bolsa', r.percentual !== '' ? r.percentual + '%' : '—') +
       dRead('Valor', r.valor !== '' ? 'R$ ' + r.valor : '—') +
     `</div></div>` +
-    `<div class="detail-section"><div class="detail-section-title">Book</div><div class="detail-grid">` +
-      dRead('Book Atual', dVal('book')) +
+    (isDependente ?
+      `<div class="detail-section"><div class="detail-section-title">Dependente BRASAS</div><div class="detail-grid">` +
+        dEdit('Unidade do Funcionário', 'dependenteUnidade', 'text') +
+        dEdit('Nome do Funcionário', 'dependenteNome', 'text') +
+      `</div></div>` : '') +
+    `<div class="detail-section"><div class="detail-section-title">Módulo</div><div class="detail-grid">` +
+      dRead('Módulo Atual', dVal('book')) +
       dEdit('Data 1ª Aula', 'data1aAula', 'text') +
-      dEdit('Data Início do Book', 'dataInicioBook', 'text') +
+      dEdit('Início do Módulo', 'dataInicioBook', 'text') +
       dEdit('Horário', 'horario', 'text') +
-      dRead('Data Prev. Conclusão', dVal('dataPrevConclusao')) +
+      dRead('Prev. Conclusão', dVal('dataPrevConclusao')) +
       dEdit('Frequência', 'frequencia', 'text') +
     `</div></div>` +
     `<div class="detail-section"><div class="detail-section-title">Frequência no Mês</div><div class="detail-grid">` +
-      dEdit('Dias Previstos', 'diasPrevistos', 'number') +
-      dEdit('Dias Assistidos', 'diasAssistidos', 'number') +
-      dComp('Dias Faltados (Book)', faltados) +
+      dEdit('Aulas Previstas', 'diasPrevistos', 'number') +
+      dEdit('Aulas Assistidas', 'diasAssistidos', 'number') +
+      dEdit('Dias de Aula', 'diasAula', 'number') +
+      dComp('Faltas no Mês', faltadosMes) +
+      dComp('Faltas no Módulo', faltados) +
+      dComp('% Faltas no Módulo', pctFaltadosLivro) +
     `</div></div>` +
     `<div class="detail-section"><div class="detail-section-title">Avaliação</div><div class="detail-grid">` +
+      dEdit('Teste 1', 'teste1', 'number') +
+      dEdit('Teste 2', 'teste2', 'number') +
       dEdit('MT', 'mt', 'number') +
       dEdit('WT', 'wt', 'number') +
       dEdit('OC', 'oc', 'number') +
       dEdit('OT', 'ot', 'number') +
-      dComp('Nota (calculada)', nota) +
-      dEdit('Aproveitamento', 'aproveitamento', 'select') +
+      dComp('Média Final', nota) +
+      dEdit('Conceito', 'aproveitamento', 'select') +
     `</div></div>` +
     `<div class="detail-section"><div class="detail-section-title">Observações</div><div class="detail-grid">` +
       dEdit('Observações', 'observacoes', 'textarea', 'span2') +
@@ -1032,7 +1102,7 @@ function _renderCurrentPage() {
   const canEdit    = USER.canEdit;
 
   if (!pageRows.length) {
-    tbody.innerHTML = '<tr><td colspan="21"><div class="empty-state"><div class="empty-icon">🔍</div><p>Nenhum aluno encontrado com esses filtros.</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="31"><div class="empty-state"><div class="empty-icon">🔍</div><p>Nenhum aluno encontrado com esses filtros.</p></div></td></tr>';
     document.getElementById('paginationBar').style.display = 'none';
     return;
   }
@@ -1053,26 +1123,38 @@ function _renderCurrentPage() {
       const k = r.ano + '|' + r.mes;
       if (k !== lastGroupKey) {
         lastGroupKey = k;
-        groupHtml = `<tr class="group-row"><td colspan="21">${esc(String(r.mes))} ${r.ano} <span class="group-count-badge">${groupCounts[k]}</span></td></tr>`;
+        groupHtml = `<tr class="group-row"><td colspan="31">${esc(String(r.mes))} ${r.ano} <span class="group-count-badge">${groupCounts[k]}</span></td></tr>`;
       }
     }
-    const faltados = r._faltados !== '' && r._faltados !== undefined ? r._faltados : '';
-    const faltSt   = faltados > 0 ? 'color:var(--danger-600);font-weight:600' : '';
+    const faltadosMes = r._faltadosMes !== '' && r._faltadosMes !== undefined ? r._faltadosMes : '';
+    const faltMesSt   = faltadosMes > 0 ? 'color:var(--danger-600);font-weight:600' : '';
+    const faltados    = r._faltados !== '' && r._faltados !== undefined ? r._faltados : '';
+    const faltSt      = faltados > 0 ? 'color:var(--danger-600);font-weight:600' : '';
+    const pctFalt     = r._pctFaltadosLivro !== '' && r._pctFaltadosLivro !== undefined ? r._pctFaltadosLivro : '';
+    const pctFaltSt   = pctFalt > 10 ? 'color:var(--danger-600);font-weight:600' : '';
     return groupHtml + `<tr data-row="${r.rowIndex}">
       ${eNomeCell(r)}
       ${eCell(r,'unidade',false)}
+      ${eCell(r,'statusAluno',canEdit)}
       ${eCell(r,'mes',false)}
       ${eCell(r,'ano',false)}
       ${eNumCell(r,'percentual',false,v=>v!==''?v+'%':'')}
       ${eCell(r,'origemBolsa',false,'font-size:.75rem')}
       ${eCell(r,'data1aAula',canEdit,'font-size:.75rem')}
       ${eCell(r,'book',false)}
+      ${eCell(r,'dataInicioBook',canEdit,'font-size:.75rem')}
       ${eCell(r,'frequencia',canEdit,'text-align:center')}
+      ${eCell(r,'horario',canEdit)}
       ${eCell(r,'dataPrevConclusao',false,'font-size:.75rem')}
       ${eNumCell(r,'diasPrevistos',canEdit)}
       ${eNumCell(r,'diasAssistidos',canEdit)}
+      ${eNumCell(r,'diasAula',canEdit)}
+      <td style="text-align:center;${faltMesSt}">${faltadosMes !== '' ? faltadosMes : ''}</td>
       <td style="text-align:center;${faltSt}">${faltados !== '' ? faltados : ''}</td>
+      <td style="text-align:center;${pctFaltSt}">${pctFalt !== '' ? pctFalt + '%' : ''}</td>
       ${eNumCell(r,'valor',false,v=>v!==''?'R$ '+v:'')}
+      ${eNumCell(r,'teste1',canEdit)}
+      ${eNumCell(r,'teste2',canEdit)}
       ${eNumCell(r,'mt',canEdit)}
       ${eNumCell(r,'wt',canEdit)}
       ${eNumCell(r,'oc',canEdit)}
@@ -1080,6 +1162,8 @@ function _renderCurrentPage() {
       <td style="text-align:center;font-size:.82rem">${r._nota !== "" ? r._nota : "<span style=\"color:var(--gray-300)\">—</span>"}</td>
       ${eAprovCell(r,canEdit)}
       ${eTextCell(r,'observacoes',canEdit)}
+      ${eCell(r,'dependenteUnidade',canEdit,'font-size:.75rem')}
+      ${eCell(r,'dependenteNome',canEdit,'font-size:.75rem')}
     </tr>`;
   }).join('');
 
@@ -1167,7 +1251,8 @@ function eAprovCell(r, canEdit) {
 }
 
 // ─── Edição inline ───────────────────────────────────────────
-const NUM_FIELDS = new Set(['percentual','diasPrevistos','diasAssistidos','valor','mt','wt','oc','ot']);
+const NUM_FIELDS  = new Set(['percentual','diasPrevistos','diasAssistidos','diasAula','teste1','teste2','valor','mt','wt','oc','ot']);
+const STATUS_OPTS = ['Vigente','Transferido','Teste Incompleto','Cancelado',''];
 
 function startEdit(td) {
   if (td.querySelector('input,select,textarea')) return;
@@ -1176,10 +1261,11 @@ function startEdit(td) {
   const val   = td.dataset.val || '';
 
   let input;
-  if (field === 'aproveitamento') {
+  if (field === 'aproveitamento' || field === 'statusAluno') {
     input = document.createElement('select');
     input.className = 'inline-select';
-    APROV_OPTIONS.forEach(o => {
+    const opts = field === 'statusAluno' ? STATUS_OPTS : APROV_OPTIONS;
+    opts.forEach(o => {
       const opt = document.createElement('option');
       opt.value = o; opt.textContent = o || '—';
       if (o === val) opt.selected = true;
@@ -1526,13 +1612,16 @@ function switchTab(tab) {
 
 // ─── Relatórios ───────────────────────────────────────────────
 function initRelatorios() {
-  const anos  = [...new Set(FULL_ROWS.map(r => String(r.ano)).filter(Boolean))].sort().reverse();
-  const meses = [...new Set(FULL_ROWS.map(r => String(r.mes)).filter(Boolean))];
-  meses.sort((a,b) => (MES_ORDER[String(a).toLowerCase()]||99) - (MES_ORDER[String(b).toLowerCase()]||99));
-  const selAno = document.getElementById('rAno');
+  const anos     = [...new Set(FULL_ROWS.map(r => String(r.ano)).filter(Boolean))].sort().reverse();
+  const meses    = [...new Set(FULL_ROWS.map(r => String(r.mes)).filter(Boolean))].sort((a,b)=>(MES_ORDER[normMesKey(a)]||99)-(MES_ORDER[normMesKey(b)]||99));
+  const unidades = [...new Set(FULL_ROWS.map(r => String(r.unidade)).filter(Boolean))].sort();
+  const origens  = [...new Set(FULL_ROWS.map(r => String(r.origemBolsa)).filter(Boolean))].sort();
+  const selAno   = document.getElementById('rAno');
   if (selAno.options.length <= 1) {
     populateSelect('rAno', anos, 'Todos');
     populateSelect('rMes', meses, 'Todos');
+    buildMS('msRelUnidade', unidades, 'buildRelatorios');
+    buildMS('msRelOrigem',  origens,  'buildRelatorios');
     const curYear = String(new Date().getFullYear());
     if (anos.includes(curYear)) selAno.value = curYear;
   }
@@ -1540,9 +1629,23 @@ function initRelatorios() {
 }
 
 function buildRelatorios() {
-  const ano = document.getElementById('rAno').value;
-  const mes = document.getElementById('rMes').value;
-  const filtered = FULL_ROWS.filter(r => (!ano || String(r.ano) === ano) && (!mes || String(r.mes) === mes));
+  _mergeChaves.clear();
+  const mergeBar = document.getElementById('mergeBar');
+  if (mergeBar) mergeBar.style.display = 'none';
+  const ano      = document.getElementById('rAno').value;
+  const mes      = document.getElementById('rMes').value;
+  const unidade  = getMS('msRelUnidade');
+  const origem   = getMS('msRelOrigem');
+  const norm     = s => String(s||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const inArr    = (v, arr) => !arr.length || arr.map(norm).includes(norm(String(v)));
+  const aluno    = norm(document.getElementById('rAluno').value);
+  const filtered = FULL_ROWS.filter(r =>
+    (!ano || String(r.ano) === ano) &&
+    (!mes || String(r.mes) === mes) &&
+    inArr(r.unidade, unidade) &&
+    inArr(r.origemBolsa, origem) &&
+    (!aluno || norm(r.nome).includes(aluno))
+  );
   const groups = {};
   for (const r of filtered) {
     const c = r.chavePDF;
@@ -1552,10 +1655,10 @@ function buildRelatorios() {
     if (r.unidade) groups[c].unidades.add(r.unidade);
   }
   const entries = Object.entries(groups);
-  document.getElementById('relCount').textContent = entries.length + ' empresa' + (entries.length !== 1 ? 's' : '');
+  document.getElementById('relCount').textContent = entries.length + ' parceiro' + (entries.length !== 1 ? 's' : '');
   const tbody = document.getElementById('relBody');
   if (!entries.length) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📋</div><p>Nenhuma empresa encontrada para este período.</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📋</div><p>Nenhum parceiro encontrado para este período.</p></div></td></tr>';
     return;
   }
   tbody.innerHTML = entries.map(([chave, info], idx) => {
@@ -1570,6 +1673,7 @@ function buildRelatorios() {
     const canMail = USER && USER.canSendEmail ? '' : 'disabled';
     const bg      = idx%2===1 ? 'background:#f7f9fc' : '';
     return '<tr style="border-bottom:1px solid var(--gray-100);' + bg + '">' +
+      '<td style="padding:9px 10px;text-align:center;width:36px"><input type="checkbox" class="merge-check" data-chave="' + _ea(chave) + '" onchange="toggleRelCheck(this)"></td>' +
       '<td style="padding:9px 14px;font-weight:600;color:var(--navy-800)">' + esc(label) + '</td>' +
       '<td style="padding:9px 12px">' + esc(mesLbl) + '</td>' +
       '<td style="padding:9px 12px">' + esc(anoLbl) + '</td>' +
@@ -1586,131 +1690,272 @@ function buildRelatorios() {
 }
 
 function gerarPDFRel(chavePDF, safeId, btn) {
-  btn.disabled = true; btn.textContent = 'Gerando…';
+  abrirSeletorAlunos([chavePDF]);
+}
+
+// ─── Estado de seleção e PDF ──────────────────────────────────
+let _mergeChaves    = new Set();
+let _pdfChaves      = [];
+let _pdfMergeMode   = false;
+
+// ─── Merge: checkbox por linha ────────────────────────────────
+function toggleRelCheck(cb) {
+  const chave = cb.dataset.chave;
+  if (cb.checked) _mergeChaves.add(chave); else _mergeChaves.delete(chave);
+  atualizarMergeBar();
+}
+function toggleMergeAll(checked) {
+  document.querySelectorAll('.merge-check').forEach(cb => {
+    cb.checked = checked;
+    const chave = cb.dataset.chave;
+    if (checked) _mergeChaves.add(chave); else _mergeChaves.delete(chave);
+  });
+  atualizarMergeBar();
+}
+function atualizarMergeBar() {
+  const bar = document.getElementById('mergeBar');
+  const n   = _mergeChaves.size;
+  if (n >= 2) {
+    bar.style.display = 'flex';
+    document.getElementById('mergeCount').textContent = n + ' parceiros selecionados';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+function limparMerge() {
+  _mergeChaves.clear();
+  document.querySelectorAll('.merge-check').forEach(cb => cb.checked = false);
+  const sa = document.getElementById('mergeSelectAll');
+  if (sa) sa.checked = false;
+  atualizarMergeBar();
+}
+
+// ─── Seletor de alunos ────────────────────────────────────────
+function abrirSeletorAlunos(chaves) {
+  _pdfMergeMode = Array.isArray(chaves) ? chaves.length > 1 : true;
+  _pdfChaves    = Array.isArray(chaves) ? chaves : [..._mergeChaves];
+
+  const alunos = FULL_ROWS.filter(r => _pdfChaves.includes(r.chavePDF));
+  const titulo = _pdfMergeMode
+    ? `Unir ${_pdfChaves.length} relatórios — ${alunos.length} aluno${alunos.length!==1?'s':''}`
+    : `Selecionar alunos — ${alunos.length} aluno${alunos.length!==1?'s':''}`;
+  document.getElementById('alunosModalTitle').textContent = 'Selecionar Alunos';
+  document.getElementById('alunosModalSub').textContent   = titulo;
+  document.getElementById('alunosError').style.display    = 'none';
+  document.getElementById('alunosGerarBtn').textContent   = _pdfMergeMode ? '📄 Unir em 1 PDF' : '📄 Gerar PDF';
+
+  const grouped = {};
+  _pdfChaves.forEach(c => { grouped[c] = []; });
+  alunos.forEach(r => { if (grouped[r.chavePDF]) grouped[r.chavePDF].push(r); });
+
+  let html = '';
+  _pdfChaves.forEach(chave => {
+    const grupo = grouped[chave] || [];
+    if (!grupo.length) return;
+    const parts  = chave.split(' - ');
+    const lbl    = parts.slice(2).join(' - ') || chave;
+    if (_pdfMergeMode) {
+      html += `<div style="padding:6px 12px;background:var(--navy-50,#f0f4ff);font-size:.75rem;font-weight:700;color:var(--navy-700);border-bottom:1px solid var(--gray-100)">${esc(lbl)} · ${esc(parts[1]||'')} ${esc(parts[0]||'')}</div>`;
+    }
+    grupo.forEach(r => {
+      html += `<label style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--gray-100);cursor:pointer;font-size:.85rem">` +
+        `<input type="checkbox" class="aluno-check" value="${r.rowIndex}" checked style="width:15px;height:15px;cursor:pointer">` +
+        `<span><strong>${esc(r.nome)}</strong>` +
+        `<span style="color:var(--gray-400);font-size:.76rem;margin-left:8px">${esc(r.unidade||'')}${r.unidade&&r.mes?' · ':''}${esc(r.mes||'')} ${esc(String(r.ano||''))}</span></span>` +
+        `</label>`;
+    });
+  });
+  document.getElementById('alunosList').innerHTML = html;
+  openModal('alunosModal');
+}
+function toggleAllAlunos(checked) {
+  document.querySelectorAll('#alunosList .aluno-check').forEach(cb => cb.checked = checked);
+}
+function confirmarGerarPDF() {
+  const excluded = [...document.querySelectorAll('#alunosList .aluno-check:not(:checked)')].map(cb => parseInt(cb.value));
+  const selected = [...document.querySelectorAll('#alunosList .aluno-check:checked')];
+  if (!selected.length) {
+    document.getElementById('alunosError').textContent = 'Selecione pelo menos 1 aluno.';
+    document.getElementById('alunosError').style.display = 'block';
+    return;
+  }
+  closeModal('alunosModal');
+  if (_pdfMergeMode) {
+    _execGerarMesclado(_pdfChaves, excluded);
+  } else {
+    _execGerarPDF(_pdfChaves[0], excluded);
+  }
+}
+
+// ─── Execução real de PDF ─────────────────────────────────────
+function _execGerarPDF(chavePDF, excluded) {
+  const safeId = btoa(unescape(encodeURIComponent(chavePDF))).replace(/=/g,'');
+  const genBtn = document.getElementById('rgen-' + safeId);
+  if (genBtn) { genBtn.disabled = true; genBtn.textContent = 'Gerando…'; }
+  toast('Gerando PDF…', true);
+
   google.script.run
     .withSuccessHandler(res => {
       const d = JSON.parse(res);
-      btn.disabled = false; btn.textContent = '🔄 PDF';
+      if (genBtn) { genBtn.disabled = false; genBtn.textContent = '🔄 PDF'; }
       if (!d.ok) { toast('Erro: ' + d.error, false); return; }
       _currentPDFFiles[chavePDF] = { fileId: d.fileId, viewUrl: d.viewUrl };
       const viewEl = document.getElementById('rview-' + safeId);
       if (viewEl) { viewEl.href = d.viewUrl; viewEl.style.display = ''; }
-      toast('PDF gerado: ' + d.totalAlunos + ' alunos', true);
+      toast('PDF gerado com sucesso!', true);
     })
-    .withFailureHandler(err => { btn.disabled = false; btn.textContent = '📄 PDF'; toast('Erro: ' + (err.message||err), false); })
-    .gerarPDF(TOKEN, chavePDF);
+    .withFailureHandler(err => {
+      if (genBtn) { genBtn.disabled = false; genBtn.textContent = '📄 PDF'; }
+      toast('Erro: ' + (err.message||err), false);
+    })
+    .gerarPDF(TOKEN, chavePDF, JSON.stringify(excluded));
+}
+function _execGerarMesclado(chaves, excluded) {
+  toast('Gerando PDF mesclado…', true);
+  google.script.run
+    .withSuccessHandler(res => {
+      const d = JSON.parse(res);
+      if (!d.ok) { toast('Erro: ' + d.error, false); return; }
+      const key = '__merge__' + chaves.join('|');
+      _currentPDFFiles[key] = { fileId: d.fileId, viewUrl: d.viewUrl };
+      limparMerge();
+      toast('PDF mesclado gerado! Abrindo…', true);
+      window.open(d.viewUrl, '_blank');
+    })
+    .withFailureHandler(err => { toast('Erro: ' + (err.message||err), false); })
+    .gerarPDFMesclado(TOKEN, JSON.stringify(chaves), JSON.stringify(excluded));
 }
 
 function openPreview(chavePDF) {
   const parts   = chavePDF.split(' - ');
-  const empresa = parts.slice(2).join(' - ') || chavePDF;
-  const mesPrev = parts[1] || '';
-  const anoPrev = parts[0] || '';
-  document.getElementById('previewTitle').textContent = 'Previa - ' + empresa;
+  const parceiro = parts.slice(2).join(' - ') || chavePDF;
+  const mesPrev  = parts[1] || '';
+  const anoPrev  = parts[0] || '';
+  document.getElementById('previewTitle').textContent = 'Prévia — ' + parceiro;
 
   const rows = FULL_ROWS.filter(r => r.chavePDF === chavePDF);
   if (!rows.length) {
-    document.getElementById('previewBody').innerHTML = '<p style="color:var(--gray-400);padding:20px 0;text-align:center">Nenhum aluno encontrado.</p>';
+    document.getElementById('previewBody').innerHTML = '<p style="color:var(--gray-400);padding:20px;text-align:center">Nenhum aluno encontrado.</p>';
     openModal('previewModal'); return;
   }
 
-  const hdrs = [
-    {l:'Unidade - Nome',w:'150px'},{l:'Origem da Bolsa',w:'90px'},{l:'% Bolsa',w:'50px'},
-    {l:'Book',w:'68px'},{l:'Frequencia - Horario',w:'88px'},
-    {l:'Dias Previstos no Mes',w:'55px'},{l:'Dias Assistidos no mes',w:'55px'},
-    {l:'Data 1a aula',w:'68px'},{l:'Data de inicio do Book',w:'68px'},
-    {l:'Data prevista para concluir o Book',w:'78px'},{l:'Valor da Mensalidade',w:'68px'},
-    {l:'MT',w:'32px'},{l:'WT',w:'32px'},{l:'OC',w:'32px'},{l:'OT',w:'32px'},
-    {l:'Nota',w:'42px'},{l:'Aproveitamento',w:'70px'},{l:'Observacoes',w:'130px'},
-  ];
+  const NAVY  = '#1d3557';
+  const STEEL = '#334155';
+  const LB    = '#dce6f1';
+  const GRAY  = '#64748b';
 
-  const TH = 'background:#1d3557;color:#fff;font-weight:700;font-size:.6rem;padding:6px 5px;text-align:center;border:1px solid #2a4d76;vertical-align:middle;word-break:break-word;white-space:normal';
-  const TD = 'padding:5px 5px;font-size:.68rem;color:#334155;border:1px solid #c9d4e0;vertical-align:middle;text-align:center';
-  const TE = 'padding:5px 5px;font-size:.68rem;color:#334155;border:1px solid #c9d4e0;background:#dce6f1;vertical-align:middle;text-align:center';
-  const TDL = TD + ';text-align:left';
-  const TEL = TE + ';text-align:left';
-
-  const hRow = '<tr>' + hdrs.map(function(h){ return '<th style="' + TH + ';width:' + h.w + '">' + esc(h.l) + '</th>'; }).join('') + '</tr>';
-
-  const dRows = rows.map(function(r, i) {
-    var nota  = r._nota || calcNota(r) || '';
-    var aprov = r._aprovAjustado || r.aproveitamento || '';
-    var obs   = [r.observacoes, r.obsExtrasEmail].filter(Boolean).join(' | ');
-    var td = i%2===0 ? TD : TE;
-    var tdl = i%2===0 ? TDL : TEL;
-    var vals = [
-      '<span style="font-weight:600">' + esc(r.unidade||'') + '</span> - ' + esc(r.nome||''),
-      esc(r.origemBolsa||''),
-      r.percentual !== '' ? r.percentual + '%' : '',
-      esc(r.book||''),
-      esc((r.frequencia||'') + (r.horario ? ' - ' + r.horario : '')),
-      r.diasPrevistos  !== '' ? r.diasPrevistos  : '',
-      r.diasAssistidos !== '' ? r.diasAssistidos : '',
-      esc(r.data1aAula||''), esc(r.dataInicioBook||''), esc(r.dataPrevConclusao||''),
-      r.valor !== '' ? 'R$ ' + r.valor : '',
-      r.mt!==''?r.mt:'', r.wt!==''?r.wt:'', r.oc!==''?r.oc:'', r.ot!==''?r.ot:'',
-      nota, aprov, esc(obs),
-    ];
-    return '<tr>' +
-      '<td style="' + tdl + '">' + vals[0] + '</td>' +
-      vals.slice(1, 16).map(function(v){ return '<td style="' + td + '">' + v + '</td>'; }).join('') +
-      '<td style="' + tdl + '">' + vals[16] + '</td>' +
-      '<td style="' + tdl + '">' + vals[17] + '</td>' +
-    '</tr>';
-  }).join('');
-
-  var logoBlock =
-    '<div style="line-height:1.1">' +
-      '<div style="font-size:1rem;font-weight:900;color:#1d3557;letter-spacing:-.01em">BRASAS</div>' +
-      '<div style="font-size:.55rem;letter-spacing:.1em;color:#4a6fa5;font-weight:700">ENGLISH COURSE</div>' +
-      '<div style="margin-top:4px;height:3px;width:52px;background:linear-gradient(90deg,#c0392b 33%,#fff 33% 66%,#2472b8 66%)"></div>' +
+  const logoBlock =
+    '<div style="line-height:1.15">' +
+      '<div style="font-size:.95rem;font-weight:900;color:'+NAVY+';letter-spacing:-.01em">BRASAS</div>' +
+      '<div style="font-size:.45rem;letter-spacing:.12em;color:#4a6fa5;font-weight:700">ENGLISH COURSE</div>' +
+      '<div style="margin-top:3px;height:2px;width:44px;background:linear-gradient(90deg,#c0392b 33%,#fff 33% 66%,#2472b8 66%)"></div>' +
     '</div>';
 
-  var html =
-    '<div style="background:#fff;padding:36px 32px;font-family:Arial,Helvetica,sans-serif">' +
+  let html =
+    '<div style="background:#fff;padding:24px;font-family:Arial,sans-serif">' +
 
-    '<table style="width:100%;border-collapse:collapse;margin-bottom:24px"><tr>' +
-      '<td style="width:130px;vertical-align:top">' + logoBlock + '</td>' +
+    '<table style="width:100%;border-collapse:collapse;margin-bottom:8px"><tr>' +
+      '<td style="width:110px;vertical-align:middle">' + logoBlock + '</td>' +
       '<td style="text-align:center;vertical-align:middle;padding:0 12px">' +
-        '<span style="font-size:.88rem;font-weight:700;color:#1d3557">Relatorio de Bolsistas - ' + esc(empresa) + '</span>' +
+        '<div style="font-size:.92rem;font-weight:700;color:'+NAVY+'">RELATÓRIO DE BOLSISTAS</div>' +
+        '<div style="font-size:.75rem;color:'+STEEL+';margin-top:3px">' + esc(parceiro) + '  ·  ' + esc(mesPrev) + ' / ' + esc(anoPrev) + '</div>' +
       '</td>' +
-      '<td style="width:130px;text-align:right;vertical-align:top">' +
-        '<div style="display:inline-block;border:1px dashed #c9d4e0;border-radius:4px;padding:6px 10px;font-size:.65rem;color:#94a3b8">Logo ' + esc(empresa) + '</div>' +
-      '</td>' +
+      '<td style="width:110px"></td>' +
     '</tr></table>' +
 
-    '<p style="text-align:center;font-size:1.05rem;font-weight:700;color:#1d3557;margin-bottom:22px">' +
-      esc(mesPrev) + ' - ' + esc(anoPrev) +
-    '</p>' +
-
-    '<table style="width:60%;margin:0 auto 24px;border-collapse:collapse"><tr>' +
-      '<td style="vertical-align:top;padding-right:28px;font-size:.72rem;line-height:1.85;color:#334155">' +
-        '<strong>Legenda:</strong><br>' +
-        'MT - Midterm Test - Prova realizada na metade do modulo<br>' +
-        'WT - Written Test - Prova escrita<br>' +
-        'OC - Oral Comprehension - Prova de compreensao oral<br>' +
-        'OT - Oral Test - Prova Oral' +
-      '</td>' +
-      '<td style="vertical-align:top;font-size:.72rem;line-height:1.85;color:#334155">' +
-        '<strong>Conceito:</strong><br>' +
-        'E - Excelente<br>MB - Muito Bom<br>B - Bom<br>R - Regular<br>I - Insuficiente<br>N - Nulo' +
-      '</td>' +
+    '<table style="width:100%;border-collapse:collapse;margin:8px 0 10px;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0"><tr>' +
+    '<td style="padding:10px 16px;vertical-align:top;width:55%">' +
+    '<div style="font-size:.8rem;font-weight:700;color:#1d3557;margin-bottom:6px">Legenda:</div>' +
+    '<div style="font-size:.73rem;color:#334155;line-height:1.9">MT - Midterm Test - Prova realizada na metade do módulo<br>WT - Written Test - Prova escrita<br>OC - Oral Comprehension - Prova de compreensão oral<br>OT - Oral Test - Prova Oral</div>' +
+    '</td>' +
+    '<td style="padding:10px 16px;vertical-align:top">' +
+    '<div style="font-size:.8rem;font-weight:700;color:#1d3557;margin-bottom:6px">Conceito:</div>' +
+    '<div style="font-size:.73rem;color:#334155;line-height:1.9">E - Excelente<br>MB - Muito Bom<br>B - Bom<br>R - Regular<br>I - Insuficiente<br>N - Nulo</div>' +
+    '</td>' +
     '</tr></table>' +
+
 
     '<div style="overflow-x:auto">' +
-      '<table style="border-collapse:collapse;border:1px solid #b0bec5;min-width:100%">' +
-        '<thead>' + hRow + '</thead>' +
-        '<tbody>' + dRows + '</tbody>' +
-      '</table>' +
-    '</div>' +
-    '<p style="margin-top:12px;font-size:.65rem;color:#94a3b8;text-align:right">' +
-      rows.length + ' aluno' + (rows.length!==1?'s':'') + ' &middot; previa gerada em ' + new Date().toLocaleDateString('pt-BR') +
-    '</p>' +
-    '</div>';
+    '<table style="border-collapse:collapse;width:100%;font-size:.63rem">';
+
+  const cols = [
+    {l:'Aluno',w:'120px',left:true},{l:'Unidade',w:'52px'},{l:'%',w:'32px'},
+    {l:'Módulo',w:'50px'},{l:'Freq./Horário',w:'85px'},
+    {l:'Início Módulo',w:'62px'},{l:'Prev. Conclusão',w:'62px'},
+    {l:'Prev.',w:'36px'},{l:'Assist.',w:'36px'},{l:'Faltas',w:'36px'},
+    {l:'Valor',w:'52px'},
+    {l:'T1',w:'28px'},{l:'T2',w:'28px'},
+    {l:'MT',w:'28px'},{l:'WT',w:'28px'},{l:'OC',w:'28px'},{l:'OT',w:'28px'},
+    {l:'Média',w:'42px'},{l:'Conceito',w:'46px'},{l:'Observações',w:'100px',left:true},
+  ];
+
+  html += '<thead><tr style="background:'+NAVY+';color:#fff">';
+  cols.forEach(function(c) {
+    html += '<th style="padding:6px 4px;font-weight:700;font-size:.58rem;border:1px solid #2a4d76;' +
+            'text-align:'+(c.left?'left':'center')+';width:'+c.w+'">'+esc(c.l)+'</th>';
+  });
+  html += '</tr></thead><tbody>';
+
+  rows.forEach(function(r, i) {
+    const nota  = calcNota(r);
+    const aprov = calcAprovAjustado(r) || r.aproveitamento || '';
+    const falta = (r.diasPrevistos!==''||r.diasAssistidos!=='')
+      ? String((parseFloat(r.diasPrevistos)||0)-(parseFloat(r.diasAssistidos)||0)) : '';
+    const bg  = i%2===0 ? '#fff' : LB;
+    const TD  = 'padding:5px 4px;border:1px solid #d1dae8;vertical-align:middle;text-align:center;background:'+bg;
+    const TDL = TD + ';text-align:left';
+    const bad = aprov==='I'||aprov==='N' ? '#dc2626' : NAVY;
+    html += '<tr>' +
+      '<td style="'+TDL+'"><strong style="color:'+NAVY+'">'+esc(r.nome||'')+'</strong></td>' +
+      '<td style="'+TD+'">'+esc(r.unidade||'')+'</td>' +
+      '<td style="'+TD+'">'+(r.percentual!==''?r.percentual+'%':'')+'</td>' +
+      '<td style="'+TD+'">'+esc(r.book||'')+'</td>' +
+      '<td style="'+TD+'">'+esc((r.frequencia||'')+(r.horario?' / '+r.horario:''))+'</td>' +
+      '<td style="'+TD+'">'+esc(r.dataInicioBook||'')+'</td>' +
+      '<td style="'+TD+'">'+esc(r.dataPrevConclusao||'')+'</td>' +
+      '<td style="'+TD+'">'+(r.diasPrevistos!==''?r.diasPrevistos:'')+'</td>' +
+      '<td style="'+TD+'">'+(r.diasAssistidos!==''?r.diasAssistidos:'')+'</td>' +
+      '<td style="'+TD+'">'+(falta!==''?falta:'')+'</td>' +
+      '<td style="'+TD+'">'+(r.valor!==''?'R$'+r.valor:'')+'</td>' +
+      '<td style="'+TD+'">'+(r.teste1!==''?r.teste1:'')+'</td>' +
+      '<td style="'+TD+'">'+(r.teste2!==''?r.teste2:'')+'</td>' +
+      '<td style="'+TD+'">'+(r.mt!==''?r.mt:'')+'</td>' +
+      '<td style="'+TD+'">'+(r.wt!==''?r.wt:'')+'</td>' +
+      '<td style="'+TD+'">'+(r.oc!==''?r.oc:'')+'</td>' +
+      '<td style="'+TD+'">'+(r.ot!==''?r.ot:'')+'</td>' +
+      '<td style="'+TD+';font-weight:600">'+(nota!==null&&nota!==undefined&&nota!==''?nota:'')+'</td>' +
+      '<td style="'+TD+';font-weight:700;color:'+bad+'">'+esc(String(aprov))+'</td>' +
+      '<td style="'+TDL+';color:'+GRAY+'">'+esc(r.observacoes||'')+'</td>' +
+    '</tr>';
+  });
+
+  html += '</tbody></table></div>' +
+    '<div style="margin-top:8px;font-size:.6rem;color:#94a3b8;text-align:right">' +
+      rows.length + ' aluno' + (rows.length!==1?'s':'') +
+      ' · prévia gerada em ' + new Date().toLocaleDateString('pt-BR') +
+    '</div></div>';
 
   document.getElementById('previewBody').innerHTML = html;
   openModal('previewModal');
 }
 </script>
+
+<!-- Modal: Seletor de Alunos para PDF -->
+<div class="modal-overlay" id="alunosModal">
+  <div class="modal-card" style="max-width:620px">
+    <div class="modal-title" id="alunosModalTitle">Selecionar Alunos</div>
+    <div id="alunosModalSub" style="font-size:.8rem;color:var(--gray-400);margin-bottom:12px"></div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button onclick="toggleAllAlunos(true)" style="font-size:.78rem;padding:4px 12px;border:1px solid var(--gray-200);border-radius:4px;cursor:pointer;background:white;color:var(--gray-600)">Marcar todos</button>
+      <button onclick="toggleAllAlunos(false)" style="font-size:.78rem;padding:4px 12px;border:1px solid var(--gray-200);border-radius:4px;cursor:pointer;background:white;color:var(--gray-600)">Desmarcar todos</button>
+    </div>
+    <div id="alunosList" style="max-height:52vh;overflow:auto;border:1px solid var(--gray-100);border-radius:6px"></div>
+    <div class="modal-error-box" id="alunosError"></div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="modal-cancel" onclick="closeModal('alunosModal')">Cancelar</button>
+      <button class="modal-primary" id="alunosGerarBtn" onclick="confirmarGerarPDF()">📄 Gerar PDF</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

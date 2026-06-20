@@ -2,8 +2,13 @@
 //  BRASAS Bolsistas — Code.gs
 // ============================================================
 
-const USERS_SHEET_ID     = '1eZPbzhzjhjHoPwMhAW5YvOZgYiAvlTYc07dRan6Lyoc';
-const BOLSISTAS_SHEET_ID = '1G7RfHP_8j7-6VPqC8ReYvpScyWvBnVyRXu8QAdeL4bQ';
+const USERS_SHEET_ID          = '1eZPbzhzjhjHoPwMhAW5YvOZgYiAvlTYc07dRan6Lyoc';
+const BOLSISTAS_SHEET_ID      = '1G7RfHP_8j7-6VPqC8ReYvpScyWvBnVyRXu8QAdeL4bQ';
+
+// Logos: (1) Suba "Brasas logo.png" no Drive, copie o ID da URL e cole aqui.
+// (2) Logos dos parceiros ficam na pasta abaixo com nome = Origem da Bolsa (qualquer extensão).
+const BRASAS_LOGO_FILE_ID      = '1fqZbnxHJNyov_9NwhwDAg235FizcnTGQ';
+const PARTNER_LOGOS_FOLDER_ID  = '1sKrz_-odKjx6YNVCSWpB5eW9v3atEvQD';
 
 const EDIT_ROLES       = ['admin', 'secretaria', 'diretor', 'b2b'];
 const EMAIL_ROLES      = ['admin', 'b2b'];
@@ -178,7 +183,13 @@ function initApp(token) {
         observacoes:       String(r[22] || ''),
         turma:             String(r[23] || ''),
         chavePDF:          String(r[24] || ''),
+        dependenteUnidade: String(r[25] || ''),
+        dependenteNome:    String(r[26] || ''),
         obsExtrasEmail:    String(r[27] || ''),
+        statusAluno:       String(r[28] || ''),
+        diasAula:          r[29] !== '' ? r[29] : '',
+        teste1:            r[30] !== '' ? r[30] : '',
+        teste2:            r[31] !== '' ? r[31] : '',
       });
     }
 
@@ -268,7 +279,13 @@ function getBolsistasData(token, paramsJson) {
         observacoes:       String(r[22] || ''),
         turma:             String(r[23] || ''),
         chavePDF:          String(r[24] || ''),
+        dependenteUnidade: String(r[25] || ''),
+        dependenteNome:    String(r[26] || ''),
         obsExtrasEmail:    String(r[27] || ''),
+        statusAluno:       String(r[28] || ''),
+        diasAula:          r[29] !== '' ? r[29] : '',
+        teste1:            r[30] !== '' ? r[30] : '',
+        teste2:            r[31] !== '' ? r[31] : '',
       });
     }
 
@@ -350,7 +367,13 @@ function updateBolsista(token, payloadJson) {
       aproveitamento:    22,
       observacoes:       23,
       turma:             24,
+      dependenteUnidade: 26,
+      dependenteNome:    27,
       obsExtrasEmail:    28,
+      statusAluno:       29,
+      diasAula:          30,
+      teste1:            31,
+      teste2:            32,
     };
 
     const col = FIELD_COL[field];
@@ -615,11 +638,224 @@ function getEmailPreview(token, chavePDF) {
   }
 }
 
-// ─── Geração de PDF ──────────────────────────────────────────
-function gerarPDF(token, chavePDF) {
+// ─── Helper: logo do parceiro na pasta do Drive ──────────────
+function _getPartnerLogoBlob(origemBolsa) {
+  if (!PARTNER_LOGOS_FOLDER_ID || !origemBolsa) return null;
   try {
-    const user = _getUser(token);
+    const folder = DriveApp.getFolderById(PARTNER_LOGOS_FOLDER_ID);
+    const files  = folder.getFiles();
+    const nome   = origemBolsa.trim().toLowerCase();
+    while (files.hasNext()) {
+      const f  = files.next();
+      const fn = f.getName();
+      const base = fn.includes('.') ? fn.substring(0, fn.lastIndexOf('.')).toLowerCase() : fn.toLowerCase();
+      if (base === nome) return f.getBlob();
+    }
+  } catch (e) {}
+  return null;
+}
+
+// ─── Constrói seção de relatório dentro de um Doc ────────────
+function _buildPDFSection(body, rows, origemBolsa, mes, ano, isFirst) {
+  const NAVY       = '#1d3557';
+  const STEEL      = '#334155';
+  const LIGHT_BLUE = '#dce6f1';
+  const WHITE      = '#ffffff';
+  const GRAY       = '#64748b';
+  const BORDER     = '#c9d4e0';
+
+  if (!isFirst) body.appendPageBreak();
+
+  // ── Cabeçalho: logo parceiro | título | logo BRASAS ──
+  const hdrTbl = body.appendTable([['', '', '']]);
+  hdrTbl.setBorderWidth(0);
+
+  // Esquerda: logo do parceiro
+  const cParc = hdrTbl.getCell(0, 0);
+  const partnerBlob = _getPartnerLogoBlob(origemBolsa);
+  if (partnerBlob) {
+    try {
+      cParc.editAsText().setText('');
+      const img = cParc.getChild(0).asParagraph().appendInlineImage(partnerBlob);
+      const w = img.getWidth(), h = img.getHeight();
+      if (w > 140 || h > 50) { const s = Math.min(140/w, 50/h); img.setWidth(Math.round(w*s)).setHeight(Math.round(h*s)); }
+    } catch(e2) {
+      cParc.editAsText().setText(origemBolsa).setFontSize(9).setFontFamily('Arial').setBold(true).setForegroundColor(NAVY);
+    }
+  } else {
+    cParc.editAsText().setText(origemBolsa).setFontSize(10).setFontFamily('Arial').setBold(true).setForegroundColor(NAVY);
+  }
+  // Centro: título
+  const cTit = hdrTbl.getCell(0, 1);
+  cTit.editAsText().setText('RELATÓRIO DE BOLSISTAS').setBold(true).setFontSize(13).setFontFamily('Arial').setForegroundColor(NAVY);
+  const subPara = cTit.appendParagraph(`${origemBolsa}  ·  ${mes} / ${ano}`);
+  subPara.editAsText().setFontSize(9).setFontFamily('Arial').setBold(false).setForegroundColor(STEEL);
+  // Alinhamento central nos parágrafos do título
+  for (let ci = 0; ci < cTit.getNumChildren(); ci++) {
+    const ch = cTit.getChild(ci);
+    if (ch.getType() === DocumentApp.ElementType.PARAGRAPH) {
+      ch.asParagraph().setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    }
+  }
+
+  // Direita: logo BRASAS (alinhado à direita via parágrafo)
+  const cBrs = hdrTbl.getCell(0, 2);
+  if (BRASAS_LOGO_FILE_ID) {
+    try {
+      cBrs.editAsText().setText('');
+      const bPara = cBrs.getChild(0).asParagraph();
+      bPara.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
+      const bImg = bPara.appendInlineImage(DriveApp.getFileById(BRASAS_LOGO_FILE_ID).getBlob());
+      const w = bImg.getWidth(), h = bImg.getHeight();
+      if (w > 320 || h > 110) { const s = Math.min(320/w, 110/h); bImg.setWidth(Math.round(w*s)).setHeight(Math.round(h*s)); }
+    } catch(e2) {
+      cBrs.editAsText().setText('BRASAS').setBold(true).setFontSize(12).setFontFamily('Arial').setForegroundColor(NAVY);
+      cBrs.appendParagraph('ENGLISH COURSE').editAsText().setFontSize(7).setFontFamily('Arial').setBold(false).setForegroundColor(GRAY);
+    }
+  } else {
+    cBrs.editAsText().setText('BRASAS').setBold(true).setFontSize(12).setFontFamily('Arial').setForegroundColor(NAVY);
+    cBrs.appendParagraph('ENGLISH COURSE').editAsText().setFontSize(7).setFontFamily('Arial').setBold(false).setForegroundColor(GRAY);
+  }
+
+  // Linha em branco pequena
+  body.appendParagraph('').editAsText().setFontSize(4);
+
+  // ── Legenda (2 colunas) ──
+  const legTbl = body.appendTable([['', '']]);
+  legTbl.setBorderWidth(0);
+  legTbl.getCell(0, 0).setWidth(860);
+  legTbl.getCell(0, 1).setWidth(568);
+  const cLeg = legTbl.getCell(0, 0);
+  cLeg.editAsText().setText('Legenda:').setBold(true).setFontSize(9).setFontFamily('Arial').setForegroundColor(NAVY);
+  ['MT - Midterm Test - Prova realizada na metade do módulo',
+   'WT - Written Test - Prova escrita',
+   'OC - Oral Comprehension - Prova de compreensão oral',
+   'OT - Oral Test - Prova Oral'].forEach(function(t) {
+    cLeg.appendParagraph(t).editAsText().setFontSize(8).setFontFamily('Arial').setBold(false).setForegroundColor(STEEL);
+  });
+  const cConc = legTbl.getCell(0, 1);
+  cConc.editAsText().setText('Conceito:').setBold(true).setFontSize(9).setFontFamily('Arial').setForegroundColor(NAVY);
+  ['E - Excelente','MB - Muito Bom','B - Bom','R - Regular','I - Insuficiente','N - Nulo'].forEach(function(t) {
+    cConc.appendParagraph(t).editAsText().setFontSize(8).setFontFamily('Arial').setBold(false).setForegroundColor(STEEL);
+  });
+
+  body.appendParagraph('').editAsText().setFontSize(4);
+
+  // ── Tabela de dados ──
+  const hdrs = [
+    'Aluno', 'Unidade', '% Bolsa', 'Módulo', 'Freq. / Horário',
+    'Início\nMódulo', 'Prev.\nConclusão', 'Aulas\nPrev.', 'Aulas\nAssist.',
+    'Faltas\n/Mês', 'Valor', 'T1', 'T2', 'MT', 'WT', 'OC', 'OT',
+    'Média Final', 'Conceito', 'Observações',
+  ];
+
+  const tableData = [hdrs];
+  rows.forEach(r => {
+    const wt = parseFloat(r[18]), oc = parseFloat(r[19]), ot = parseFloat(r[20]);
+    const mt = parseFloat(r[17]);
+    let nota = '';
+    if (!isNaN(wt) && !isNaN(oc) && !isNaN(ot)) nota = ((wt + oc + ot) / 3).toFixed(1);
+    else if (!isNaN(mt)) nota = Number(mt).toFixed(1);
+    const notaN = parseFloat(nota);
+    const dias  = parseFloat(r[15]);
+    let aprov   = String(r[21] || '');
+    if (nota !== '') {
+      if (!isNaN(dias) && dias <= 1) aprov = 'N';
+      else if (notaN >= 90) aprov = 'E';
+      else if (notaN >= 80) aprov = 'MB';
+      else if (notaN >= 70) aprov = 'B';
+      else if (notaN >= 60) aprov = 'R';
+      else aprov = 'I';
+    }
+    const falta = (r[14] !== '' || r[15] !== '')
+      ? String((parseFloat(r[14]) || 0) - (parseFloat(r[15]) || 0)) : '';
+
+    tableData.push([
+      String(r[5]  || ''),
+      String(r[2]  || ''),
+      r[6]  !== '' ? String(r[6]) + '%' : '',
+      String(r[9]  || ''),
+      `${r[10] || ''} / ${r[13] || ''}`,
+      _fmtDate(r[11]),
+      _fmtDate(r[12]),
+      r[14] !== '' ? String(r[14]) : '',
+      r[15] !== '' ? String(r[15]) : '',
+      falta,
+      r[16] !== '' ? 'R$ ' + r[16] : '',
+      r[30] !== '' ? String(r[30]) : '',
+      r[31] !== '' ? String(r[31]) : '',
+      r[17] !== '' ? String(r[17]) : '',
+      r[18] !== '' ? String(r[18]) : '',
+      r[19] !== '' ? String(r[19]) : '',
+      r[20] !== '' ? String(r[20]) : '',
+      nota,
+      aprov,
+      String(r[22] || ''),
+    ]);
+  });
+
+  const table = body.appendTable(tableData);
+  table.setBorderWidth(0.3);
+
+  // Larguras das colunas somando ~1428 pts (página 1500 - margens 36×2)
+  const colWidths = [140,72,42,85,110,78,78,48,48,48,70,35,35,35,35,35,35,62,60,277];
+  const hRow = table.getRow(0);
+  for (let c = 0; c < hdrs.length; c++) {
+    hRow.getCell(c).setBackgroundColor(NAVY)
+      .editAsText().setForegroundColor(WHITE).setBold(true).setFontSize(7).setFontFamily('Arial');
+    if (colWidths[c]) hRow.getCell(c).setWidth(colWidths[c]);
+  }
+  for (let ri = 1; ri < table.getNumRows(); ri++) {
+    for (let c = 0; c < hdrs.length; c++) {
+      const cell = table.getCell(ri, c);
+      cell.editAsText().setFontSize(8).setFontFamily('Arial');
+      if (ri % 2 === 0) cell.setBackgroundColor(LIGHT_BLUE);
+    }
+  }
+
+  // ── Rodapé ──
+  body.appendParagraph(
+    `Total: ${rows.length} aluno${rows.length !== 1 ? 's' : ''}  ·  ` +
+    Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm') +
+    '  ·  BRASAS English Course'
+  ).editAsText().setFontSize(7).setFontFamily('Arial').setForegroundColor(GRAY);
+}
+
+// ─── Salva PDF no Drive (helper interno) ─────────────────────
+function _savePDF(docId, docTitle, origemBolsa) {
+  const docFile = DriveApp.getFileById(docId);
+  const pdfBlob = docFile.getAs('application/pdf').setName(docTitle + '.pdf');
+
+  const roots = DriveApp.getFoldersByName('Relatórios Bolsistas');
+  const root  = roots.hasNext() ? roots.next() : DriveApp.createFolder('Relatórios Bolsistas');
+
+  let folder = root;
+  if (origemBolsa) {
+    const subs = root.getFoldersByName(origemBolsa);
+    folder = subs.hasNext() ? subs.next() : root.createFolder(origemBolsa);
+  }
+
+  const existing = folder.getFilesByName(docTitle + '.pdf');
+  while (existing.hasNext()) existing.next().setTrashed(true);
+
+  const pdfFile = folder.createFile(pdfBlob);
+  pdfFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  docFile.setTrashed(true);
+
+  return JSON.stringify({
+    ok:       true,
+    fileId:   pdfFile.getId(),
+    fileName: pdfFile.getName(),
+    viewUrl:  pdfFile.getUrl(),
+  });
+}
+
+// ─── Geração de PDF (parceiro único) ─────────────────────────
+function gerarPDF(token, chavePDF, excludedRowsJson) {
+  try {
+    const user     = _getUser(token);
     if (!user.canSendEmail) throw new Error('Sem permissão para gerar PDF.');
+    const excluded = excludedRowsJson ? new Set(JSON.parse(excludedRowsJson).map(Number)) : new Set();
 
     const ss    = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
     const sheet = ss.getSheetByName('Bolsistas App');
@@ -627,195 +863,71 @@ function gerarPDF(token, chavePDF) {
 
     const rows = [];
     for (let i = 1; i < data.length; i++) {
-      if (String(data[i][24] || '').trim() === chavePDF.trim()) rows.push(data[i]);
+      if (String(data[i][24] || '').trim() === chavePDF.trim() && !excluded.has(i + 1)) {
+        rows.push(data[i]);
+      }
     }
-    if (!rows.length) throw new Error('Nenhum aluno encontrado para esta chave PDF.');
+    if (!rows.length) throw new Error('Nenhum aluno selecionado para este relatório.');
 
     const origemBolsa = String(rows[0][7] || '').trim();
     const parts       = chavePDF.split(' - ');
     const ano         = parts[0] || '';
     const mes         = parts[1] || '';
 
-    // Parceiro
-    const parcSheet = ss.getSheetByName('Parceiros');
-    let logo = '';
-    if (parcSheet) {
-      const pd = parcSheet.getDataRange().getValues();
-      for (let i = 1; i < pd.length; i++) {
-        if (String(pd[i][0] || '').trim() === origemBolsa) { logo = String(pd[i][1] || '').trim(); break; }
-      }
-    }
-
-    // ── Cria Google Doc ──
     const docTitle = `Relatório Bolsistas — ${chavePDF}`;
     const doc  = DocumentApp.create(docTitle);
     const body = doc.getBody();
     body.clear();
+    body.setPageWidth(1500).setPageHeight(850);
+    body.setMarginTop(28).setMarginBottom(28).setMarginLeft(36).setMarginRight(36);
 
-    // A4, margens estreitas (pontos)
-    body.setPageWidth(794).setPageHeight(1123);
-    body.setMarginTop(28).setMarginBottom(28).setMarginLeft(28).setMarginRight(28);
+    _buildPDFSection(body, rows, origemBolsa, mes, ano, true);
+    doc.saveAndClose();
+    return _savePDF(doc.getId(), docTitle, origemBolsa);
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
+}
 
-    // ── 1. Cabeçalho (tabela 3 colunas) ──
-    const hdrTbl = body.appendTable([['', '', '']]);
-    hdrTbl.setBorderWidth(0);
+// ─── Geração de PDF mesclado (múltiplos parceiros) ───────────
+function gerarPDFMesclado(token, chavesJSON, excludedRowsJson) {
+  try {
+    const user     = _getUser(token);
+    if (!user.canSendEmail) throw new Error('Sem permissão para gerar PDF.');
+    const chaves   = JSON.parse(chavesJSON);
+    if (!chaves.length) throw new Error('Nenhuma chave selecionada.');
+    const excluded = excludedRowsJson ? new Set(JSON.parse(excludedRowsJson).map(Number)) : new Set();
 
-    // Coluna esq: BRASAS
-    const cB = hdrTbl.getCell(0, 0);
-    cB.getParagraphs()[0].setText('BRASAS');
-    cB.getParagraphs()[0].editAsText().setBold(true).setFontSize(12).setForegroundColor('#1d3557');
-    cB.appendParagraph('ENGLISH COURSE').editAsText().setBold(false).setFontSize(6).setForegroundColor('#4a6fa5');
+    const ss    = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+    const sheet = ss.getSheetByName('Bolsistas App');
+    const data  = sheet.getDataRange().getValues();
 
-    // Coluna central: título
-    const cT = hdrTbl.getCell(0, 1);
-    cT.getParagraphs()[0].setText(`Relatório de Bolsistas - ${origemBolsa}`);
-    cT.editAsText().setBold(true).setFontSize(11).setForegroundColor('#1d3557');
-    cT.setHorizontalAlignment(DocumentApp.HorizontalAlignment.CENTER);
-
-    // Coluna dir: logo da empresa
-    const cL = hdrTbl.getCell(0, 2);
-    cL.setHorizontalAlignment(DocumentApp.HorizontalAlignment.RIGHT);
-    if (logo) {
-      try {
-        const imgPara = cL.getParagraphs()[0];
-        imgPara.setText('');
-        imgPara.appendInlineImage(DriveApp.getFileById(logo).getBlob());
-      } catch(eL) {
-        cL.getParagraphs()[0].setText(origemBolsa);
-        cL.editAsText().setFontSize(9).setForegroundColor('#64748b');
-      }
-    } else {
-      cL.getParagraphs()[0].setText(origemBolsa);
-      cL.editAsText().setFontSize(9).setForegroundColor('#64748b');
+    const byChave = {};
+    chaves.forEach(c => { byChave[c] = []; });
+    for (let i = 1; i < data.length; i++) {
+      const chave = String(data[i][24] || '').trim();
+      if (byChave[chave] !== undefined && !excluded.has(i + 1)) byChave[chave].push(data[i]);
     }
 
-    // ── 2. Subtítulo centralizado ──
-    body.appendParagraph('');
-    const subP = body.appendParagraph(`${mes} - ${ano}`);
-    subP.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-    subP.editAsText().setBold(true).setFontSize(14).setForegroundColor('#1d3557');
-    body.appendParagraph('');
+    const docTitle = `Relatório Bolsistas — Mesclado (${chaves.length} parceiros)`;
+    const doc  = DocumentApp.create(docTitle);
+    const body = doc.getBody();
+    body.clear();
+    body.setPageWidth(1500).setPageHeight(850);
+    body.setMarginTop(28).setMarginBottom(28).setMarginLeft(36).setMarginRight(36);
 
-    // ── 3. Legenda (tabela 2 colunas, sem borda) ──
-    const legTbl = body.appendTable([['Legenda:', 'Conceito:'], ['', '']]);
-    legTbl.setBorderWidth(0);
-
-    legTbl.getCell(0, 0).editAsText().setBold(true).setFontSize(8).setForegroundColor('#1d3557');
-    legTbl.getCell(0, 1).editAsText().setBold(true).setFontSize(8).setForegroundColor('#1d3557');
-
-    const lc0 = legTbl.getCell(1, 0);
-    lc0.getParagraphs()[0].setText('MT - Midterm Test - Prova realizada na metade do módulo');
-    lc0.appendParagraph('WT - Written Test - Prova escrita');
-    lc0.appendParagraph('OC - Oral Comprehension - Prova de compreensão oral');
-    lc0.appendParagraph('OT - Oral Test - Prova Oral');
-    lc0.getParagraphs().forEach(p => p.editAsText().setFontSize(8).setForegroundColor('#334155'));
-
-    const lc1 = legTbl.getCell(1, 1);
-    lc1.getParagraphs()[0].setText('E - Excelente');
-    lc1.appendParagraph('MB - Muito Bom');
-    lc1.appendParagraph('B - Bom');
-    lc1.appendParagraph('R - Regular');
-    lc1.appendParagraph('I - Insuficiente');
-    lc1.appendParagraph('N - Nulo');
-    lc1.getParagraphs().forEach(p => p.editAsText().setFontSize(8).setForegroundColor('#334155'));
-
-    body.appendParagraph('');
-
-    // ── 4. Tabela de dados (18 colunas) ──
-    const hdrs = [
-      'Unidade - Nome', 'Origem da Bolsa', '% Bolsa', 'Book',
-      'Frequência - Horário', 'Dias Prev. no Mês', 'Dias Assist. no mês',
-      'Data 1ª aula', 'Data início do Book', 'Data prev. conclusão',
-      'Valor da Mensalidade', 'MT', 'WT', 'OC', 'OT',
-      'Nota', 'Aproveitamento', 'Observações',
-    ];
-
-    const tableData = [hdrs];
-    rows.forEach(r => {
-      const wt  = parseFloat(r[18]), oc = parseFloat(r[19]), ot = parseFloat(r[20]);
-      const mt  = parseFloat(r[17]);
-      let nota  = '';
-      if (!isNaN(wt) && !isNaN(oc) && !isNaN(ot)) nota = ((wt + oc + ot) / 3).toFixed(1);
-      else if (!isNaN(mt)) nota = Number(mt).toFixed(1);
-
-      const notaN = parseFloat(nota);
-      const dias  = parseFloat(r[15]);
-      let aprov   = String(r[21] || '');
-      if (nota !== '') {
-        if (!isNaN(dias) && dias <= 1) aprov = 'N';
-        else if (notaN >= 90) aprov = 'E';
-        else if (notaN >= 80) aprov = 'MB';
-        else if (notaN >= 70) aprov = 'B';
-        else if (notaN >= 60) aprov = 'R';
-        else aprov = 'I';
-      }
-
-      tableData.push([
-        `${r[2]} - ${r[5]}`,
-        String(r[7]  || ''),
-        r[6]  !== '' ? String(r[6])  + '%' : '',
-        String(r[9]  || ''),
-        `${r[10] || ''} - ${r[13] || ''}`,
-        r[14] !== '' ? String(r[14]) : '',
-        r[15] !== '' ? String(r[15]) : '',
-        _fmtDate(r[8]),
-        _fmtDate(r[11]),
-        _fmtDate(r[12]),
-        r[16] !== '' ? 'R$ ' + r[16] : '',
-        r[17] !== '' ? String(r[17]) : '',
-        r[18] !== '' ? String(r[18]) : '',
-        r[19] !== '' ? String(r[19]) : '',
-        r[20] !== '' ? String(r[20]) : '',
-        nota,
-        aprov,
-        String(r[22] || ''),
-      ]);
+    let first = true;
+    chaves.forEach(chave => {
+      const rows = byChave[chave] || [];
+      if (!rows.length) return;
+      const origemBolsa = String(rows[0][7] || '').trim();
+      const parts = chave.split(' - ');
+      _buildPDFSection(body, rows, origemBolsa, parts[1] || '', parts[0] || '', first);
+      first = false;
     });
-
-    const table = body.appendTable(tableData);
-    table.setBorderWidth(0.5);
-
-    // Header: navy, branco, negrito
-    const hRow = table.getRow(0);
-    for (let c = 0; c < hdrs.length; c++) {
-      hRow.getCell(c).setBackgroundColor('#1d3557')
-        .editAsText().setForegroundColor('#FFFFFF').setBold(true).setFontSize(7);
-    }
-    // Linhas de dados: font 8, zebra azul claro
-    for (let r = 1; r < table.getNumRows(); r++) {
-      for (let c = 0; c < hdrs.length; c++) {
-        const cell = table.getCell(r, c);
-        cell.editAsText().setFontSize(8);
-        if (r % 2 === 0) cell.setBackgroundColor('#dce6f1');
-      }
-    }
 
     doc.saveAndClose();
-
-    // Exporta como PDF
-    const docFile = DriveApp.getFileById(doc.getId());
-    const pdfBlob = docFile.getAs('application/pdf').setName(docTitle + '.pdf');
-
-    let folder;
-    const folders = DriveApp.getFoldersByName('Relatórios Bolsistas');
-    folder = folders.hasNext() ? folders.next() : DriveApp.createFolder('Relatórios Bolsistas');
-
-    // Remove versão anterior se existir
-    const existing = folder.getFilesByName(docTitle + '.pdf');
-    while (existing.hasNext()) existing.next().setTrashed(true);
-
-    const pdfFile = folder.createFile(pdfBlob);
-    pdfFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
-    docFile.setTrashed(true); // descarta o Doc temporário
-
-    return JSON.stringify({
-      ok:          true,
-      fileId:      pdfFile.getId(),
-      fileName:    pdfFile.getName(),
-      viewUrl:     pdfFile.getUrl(),
-      totalAlunos: rows.length,
-    });
+    return _savePDF(doc.getId(), docTitle, 'Mesclado');
   } catch (e) {
     return JSON.stringify({ ok: false, error: e.message });
   }
@@ -891,69 +1003,93 @@ function enviarEmail(token, payloadJson) {
 }
 
 function _buildEmailHtml(origemBolsa, mes, ano, rows, obsExtra) {
-  const rowsHtml = rows.map((r, idx) =>
-    `<tr style="background:${idx % 2 === 0 ? '#fff' : '#f8fafc'}">
-      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0"><b style="color:#1d3557">${r[2]}</b> — ${r[5]}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[6] !== '' ? r[6] + '%' : ''}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[9] || ''}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[10] || ''}${r[13] ? '<br><span style="font-size:11px;color:#64748b">' + r[13] + '</span>' : ''}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[14] !== '' ? r[14] : ''}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[15] !== '' ? r[15] : ''}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[17] || ''}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[18] || ''}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[19] || ''}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${r[20] || ''}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700">${r[21] || ''}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:11px;color:#475569">${r[22] || ''}</td>
-    </tr>`
-  ).join('');
+  const td  = (v, center, bold) =>
+    `<td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;${center?'text-align:center;':''}${bold?'font-weight:700;':''}">${v}</td>`;
+
+  const rowsHtml = rows.map((r, idx) => {
+    const wt = parseFloat(r[18]), oc = parseFloat(r[19]), ot = parseFloat(r[20]);
+    const mt = parseFloat(r[17]);
+    let nota = '';
+    if (!isNaN(wt) && !isNaN(oc) && !isNaN(ot)) nota = ((wt + oc + ot) / 3).toFixed(1);
+    else if (!isNaN(mt)) nota = Number(mt).toFixed(1);
+    const notaN = parseFloat(nota);
+    const dias  = parseFloat(r[15]);
+    let aprov   = String(r[21] || '');
+    if (nota !== '') {
+      if (!isNaN(dias) && dias <= 1) aprov = 'N';
+      else if (notaN >= 90) aprov = 'E';
+      else if (notaN >= 80) aprov = 'MB';
+      else if (notaN >= 70) aprov = 'B';
+      else if (notaN >= 60) aprov = 'R';
+      else aprov = 'I';
+    }
+    const falta = (r[14] !== '' || r[15] !== '')
+      ? String((parseFloat(r[14])||0) - (parseFloat(r[15])||0)) : '';
+
+    return `<tr style="background:${idx % 2 === 0 ? '#fff' : '#f8fafc'}">
+      ${td(`<b style="color:#1d3557">${r[2]}</b> — ${r[5]}`)}
+      ${td(r[6] !== '' ? r[6] + '%' : '', true)}
+      ${td(r[9] || '', true)}
+      ${td((r[10]||'') + (r[13] ? '<br><span style="font-size:11px;color:#64748b">'+r[13]+'</span>' : ''), true)}
+      ${td(r[14] !== '' ? String(r[14]) : '', true)}
+      ${td(r[15] !== '' ? String(r[15]) : '', true)}
+      ${td(falta, true)}
+      ${td(r[30] !== '' ? String(r[30]) : '', true)}
+      ${td(r[31] !== '' ? String(r[31]) : '', true)}
+      ${td(r[17] !== '' ? String(r[17]) : '', true)}
+      ${td(r[18] !== '' ? String(r[18]) : '', true)}
+      ${td(r[19] !== '' ? String(r[19]) : '', true)}
+      ${td(r[20] !== '' ? String(r[20]) : '', true)}
+      ${td(nota, true)}
+      ${td(aprov, true, true)}
+      ${td(`<span style="font-size:11px;color:#475569">${r[22] || ''}</span>`)}
+    </tr>`;
+  }).join('');
 
   const obsBlock = obsExtra
     ? `<div style="margin:20px 0 0;padding:14px 18px;background:#f8fafc;border-left:3px solid #1d3557;border-radius:0 6px 6px 0;font-size:13px;color:#475569"><b>Observações:</b> ${obsExtra}</div>`
     : '';
 
+  const th = txt => `<th style="padding:9px 8px;text-align:center;font-weight:600;white-space:nowrap">${txt}</th>`;
+
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
 <body style="font-family:Arial,Helvetica,sans-serif;margin:0;padding:24px 16px;background:#f1f5f9">
-  <div style="max-width:960px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,.09)">
+  <div style="max-width:1020px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,.09)">
 
-    <!-- Cabeçalho -->
     <div style="background:#1d3557;padding:24px 32px">
       <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:5px">Relatório de Frequência e Aproveitamento</div>
-      <div style="font-size:13px;color:rgba(255,255,255,.65)">BRASAS English Course &nbsp;·&nbsp; ${mes}/${ano}</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.65)">BRASAS English Course &nbsp;·&nbsp; ${mes} / ${ano}</div>
     </div>
 
-    <!-- Corpo -->
     <div style="padding:28px 32px 24px">
       <p style="margin:0 0 14px;font-size:14px;color:#334155">Olá!</p>
       <p style="margin:0;font-size:14px;color:#334155;line-height:1.65">
         Segue em anexo o <strong>Relatório de Frequência e Aproveitamento</strong> dos alunos bolsistas de
-        <strong>${origemBolsa}</strong>, referente ao mês de <strong>${mes}/${ano}</strong>.
+        <strong>${origemBolsa}</strong>, referente ao mês de <strong>${mes} / ${ano}</strong>.
       </p>
       ${obsBlock}
     </div>
 
-    <!-- Tabela -->
     <div style="border-top:1px solid #e2e8f0;overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead>
           <tr style="background:#1d3557;color:#fff">
             <th style="padding:9px 12px;text-align:left;min-width:180px;font-weight:600">Unidade — Nome</th>
-            <th style="padding:9px 12px;text-align:center;font-weight:600">% Bolsa</th>
-            <th style="padding:9px 12px;text-align:center;font-weight:600">Book</th>
-            <th style="padding:9px 12px;text-align:center;font-weight:600">Freq. / Horário</th>
-            <th style="padding:9px 12px;text-align:center;font-weight:600">Dias Prev.</th>
-            <th style="padding:9px 12px;text-align:center;font-weight:600">Dias Assist.</th>
-            <th style="padding:9px 12px;text-align:center;font-weight:600">MT</th>
-            <th style="padding:9px 12px;text-align:center;font-weight:600">WT</th>
-            <th style="padding:9px 12px;text-align:center;font-weight:600">OC</th>
-            <th style="padding:9px 12px;text-align:center;font-weight:600">OT</th>
-            <th style="padding:9px 12px;text-align:center;font-weight:600">Aproveit.</th>
-            <th style="padding:9px 12px;text-align:left;min-width:180px;font-weight:600">Observações</th>
+            ${th('% Bolsa')}${th('Módulo')}${th('Freq. / Horário')}
+            ${th('Aulas Prev.')}${th('Aulas Assist.')}${th('Faltas/Mês')}
+            ${th('T1')}${th('T2')}
+            ${th('MT')}${th('WT')}${th('OC')}${th('OT')}
+            ${th('Média Final')}${th('Conceito')}
+            <th style="padding:9px 12px;text-align:left;font-weight:600">Observações</th>
           </tr>
         </thead>
         <tbody>${rowsHtml}</tbody>
       </table>
+    </div>
+
+    <div style="padding:16px 32px;font-size:11px;color:#94a3b8;border-top:1px solid #f1f5f9;text-align:right">
+      BRASAS English Course &nbsp;·&nbsp; Gerado automaticamente
     </div>
 
   </div>
