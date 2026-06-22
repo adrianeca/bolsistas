@@ -128,45 +128,60 @@ function initApp(token) {
     const sheet = ss.getSheetByName('Bolsistas App');
     if (!sheet) return JSON.stringify({ ok: false, error: 'Aba "Bolsistas App" não encontrada.' });
 
-    const feriadosSheet = ss.getSheetByName('Feriados');
-    const feriados = [];
-    if (feriadosSheet) {
-      const fData = feriadosSheet.getDataRange().getValues();
-      for (let i = 1; i < fData.length; i++) {
-        const d = fData[i][0];
-        if (!d) continue;
-        if (d instanceof Date) {
-          const dd = String(d.getDate()).padStart(2, '0');
-          const mm = String(d.getMonth() + 1).padStart(2, '0');
-          feriados.push(`${dd}/${mm}/${d.getFullYear()}`);
-        } else {
-          const s = String(d).trim();
-          if (s) feriados.push(s);
+    // ── Feriados (cache 6h — raramente mudam) ──
+    let feriados = [];
+    const ferCacheKey = 'feriados_v1';
+    const ferCached = cache.get(ferCacheKey);
+    if (ferCached) {
+      feriados = JSON.parse(ferCached);
+    } else {
+      const feriadosSheet = ss.getSheetByName('Feriados');
+      if (feriadosSheet) {
+        const fData = feriadosSheet.getDataRange().getValues();
+        for (let i = 1; i < fData.length; i++) {
+          const d = fData[i][0];
+          if (!d) continue;
+          if (d instanceof Date) {
+            const dd = String(d.getDate()).padStart(2, '0');
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            feriados.push(`${dd}/${mm}/${d.getFullYear()}`);
+          } else {
+            const s = String(d).trim();
+            if (s) feriados.push(s);
+          }
         }
       }
+      try { cache.put(ferCacheKey, JSON.stringify(feriados), 21600); } catch(e) {}
     }
 
-    // ── Funcionários (RJ - UNIDADES1): unidades e nomes por unidade ──
-    const funcionarios = { unidades: [], porUnidade: {} };
-    const funcSheet = SpreadsheetApp.openById(FUNCIONARIOS_SHEET_ID).getSheetByName('RJ - UNIDADES');
-    if (funcSheet) {
-      const fRows = funcSheet.getDataRange().getValues();
-      const unidadesSet = new Set();
-      for (let i = 1; i < fRows.length; i++) {
-        const fr      = fRows[i];
-        const nome    = String(fr[2]  || '').trim();   // C
-        const status  = String(fr[10] || '').trim();   // K
-        const unit1   = String(fr[21] || '').trim();   // V
-        const unit2   = String(fr[30] || '').trim();   // AE
-        if (!nome || status.toLowerCase() !== 'ativo') continue;
-        [unit1, unit2].filter(Boolean).forEach(u => {
-          unidadesSet.add(u);
-          if (!funcionarios.porUnidade[u]) funcionarios.porUnidade[u] = [];
-          if (!funcionarios.porUnidade[u].includes(nome)) funcionarios.porUnidade[u].push(nome);
-        });
+    // ── Funcionários (cache 1h — planilha separada, custo alto) ──
+    let funcionarios = { unidades: [], porUnidade: {} };
+    const funcCacheKey = 'funcionarios_v1';
+    const funcCached = cache.get(funcCacheKey);
+    if (funcCached) {
+      funcionarios = JSON.parse(funcCached);
+    } else {
+      const funcSheet = SpreadsheetApp.openById(FUNCIONARIOS_SHEET_ID).getSheetByName('RJ - UNIDADES');
+      if (funcSheet) {
+        const fRows = funcSheet.getDataRange().getValues();
+        const unidadesSet = new Set();
+        for (let i = 1; i < fRows.length; i++) {
+          const fr    = fRows[i];
+          const nome  = String(fr[2]  || '').trim();
+          const status= String(fr[10] || '').trim();
+          const unit1 = String(fr[21] || '').trim();
+          const unit2 = String(fr[30] || '').trim();
+          if (!nome || status.toLowerCase() !== 'ativo') continue;
+          [unit1, unit2].filter(Boolean).forEach(u => {
+            unidadesSet.add(u);
+            if (!funcionarios.porUnidade[u]) funcionarios.porUnidade[u] = [];
+            if (!funcionarios.porUnidade[u].includes(nome)) funcionarios.porUnidade[u].push(nome);
+          });
+        }
+        funcionarios.unidades = [...unidadesSet].sort();
+        Object.keys(funcionarios.porUnidade).forEach(u => funcionarios.porUnidade[u].sort());
       }
-      funcionarios.unidades = [...unidadesSet].sort();
-      Object.keys(funcionarios.porUnidade).forEach(u => funcionarios.porUnidade[u].sort());
+      try { cache.put(funcCacheKey, JSON.stringify(funcionarios), 3600); } catch(e) {}
     }
 
     const data = sheet.getDataRange().getValues();
@@ -794,7 +809,9 @@ function _buildPDFSection(body, rows, origemBolsa, mes, ano, isFirst) {
   ['MT - Midterm Test - Prova realizada na metade do módulo',
    'WT - Written Test - Prova escrita',
    'OC - Oral Comprehension - Prova de compreensão oral',
-   'OT - Oral Test - Prova Oral'].forEach(function(t) {
+   'OT - Oral Test - Prova Oral',
+   'T1 - Teste 1',
+   'T2 - Teste 2'].forEach(function(t) {
     cLeg.appendParagraph(t).editAsText().setFontSize(11).setFontFamily('Arial').setBold(false).setForegroundColor(STEEL);
   });
   const cConc = legTbl.getCell(0, 1);
