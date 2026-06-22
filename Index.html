@@ -750,11 +750,14 @@ let USER = null;
 let ALL_ROWS = [];
 let FILTER_OPTIONS = {};
 let _currentPDFFiles = {};
+let _relFiltered     = [];
+let FUNCIONARIOS     = { unidades: [], porUnidade: {} };
 let PAGE = 1;
 const PAGE_SIZE = 50;
 let SORT_FIELD = '';
 let SORT_DIR = 1;
 let FULL_ROWS = [];
+let FERIADOS  = new Set();
 const MES_ORDER = {janeiro:1,fevereiro:2,'março':3,marco:3,abril:4,maio:5,junho:6,julho:7,agosto:8,setembro:9,outubro:10,novembro:11,dezembro:12};
 const normMesKey = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/^\d+\s*/,'');
 
@@ -816,8 +819,10 @@ function onAppData(jsonStr) {
   buildMS('msUnidade', res.unidades);
   buildMS('msOrigem',  res.origens);
 
-  FULL_ROWS   = res.rows;
-  ALL_ROWS    = res.rows;
+  FERIADOS     = new Set(res.feriados || []);
+  FUNCIONARIOS = res.funcionarios || { unidades: [], porUnidade: {} };
+  FULL_ROWS    = res.rows;
+  ALL_ROWS     = res.rows;
 
   renderTable(ALL_ROWS);
 }
@@ -847,6 +852,15 @@ function buildMS(id, values, onChangeFn) {
 
 function getMS(id) {
   return [...document.querySelectorAll(`#${id} .ms-panel input:checked`)].map(cb => cb.value);
+}
+
+function _setMS(id, values) {
+  const norm = s => String(s||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const normVals = values.map(norm);
+  document.querySelectorAll(`#${id} .ms-panel input`).forEach(cb => {
+    cb.checked = normVals.includes(norm(cb.value));
+  });
+  updateMSLabel(id);
 }
 
 function updateMSLabel(id) {
@@ -904,6 +918,45 @@ function clearFilters() {
 // ─── Tabela ──────────────────────────────────────────────────
 const APROV_OPTIONS = ['MB','B','R','E','I','N',''];
 
+const _DIA_SEMANA = {
+  'segunda':1, 'terca':2, 'quarta':3, 'quinta':4,
+  'sexta':5, 'sabado':6, 'domingo':0
+};
+const _normDia = s => s.trim().toLowerCase()
+  .normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+function _parseDateBR(s) {
+  if (!s || typeof s !== 'string') return null;
+  const p = s.split('/');
+  if (p.length !== 3) return null;
+  const d = new Date(Number(p[2]), Number(p[1]) - 1, Number(p[0]));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function _fmtDateBR(d) {
+  return String(d.getDate()).padStart(2,'0') + '/' +
+         String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+}
+
+function calcTotalDiasModulo(dataInicio, dataFim, diasAulaStr) {
+  const start = _parseDateBR(dataInicio);
+  const end   = _parseDateBR(dataFim);
+  if (!start || !end || !diasAulaStr) return null;
+  const diasNums = String(diasAulaStr).split(',')
+    .map(s => _DIA_SEMANA[_normDia(s)])
+    .filter(n => n !== undefined);
+  if (!diasNums.length) return null;
+  const diasSet = new Set(diasNums);
+  let total = 0;
+  const cur = new Date(start);
+  while (cur <= end) {
+    if (diasSet.has(cur.getDay()) && !FERIADOS.has(_fmtDateBR(cur)))
+      total += (cur.getDay() === 6) ? 2 : 1;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return total || null;
+}
+
 function calcNota(r) {
   const wt = r.wt !== '' ? parseFloat(r.wt) : NaN;
   const mt = r.mt !== '' ? parseFloat(r.mt) : NaN;
@@ -947,15 +1000,21 @@ function renderTable(rows) {
   const totals  = {};
   for (const r of rows) {
     const k = bookKey(r);
-    if (!totals[k]) totals[k] = { prev: 0, assist: 0 };
+    if (!totals[k]) {
+      totals[k] = {
+        prev: 0, assist: 0,
+        totalModulo: calcTotalDiasModulo(r.dataInicioBook, r.dataPrevConclusao, r.diasAula)
+      };
+    }
     totals[k].prev   += parseFloat(r.diasPrevistos)  || 0;
     totals[k].assist += parseFloat(r.diasAssistidos) || 0;
   }
   for (const r of rows) {
     const t = totals[bookKey(r)];
-    r._faltados            = t ? t.prev - t.assist : '';
-    r._pctFaltadosLivro    = (t && t.prev > 0) ? Math.round((t.prev - t.assist) / t.prev * 100) : '';
-    r._faltadosMes         = (r.diasPrevistos !== '' || r.diasAssistidos !== '')
+    r._faltados         = t ? t.prev - t.assist : '';
+    const denom         = (t && t.totalModulo > 0) ? t.totalModulo : (t && t.prev > 0 ? t.prev : 0);
+    r._pctFaltadosLivro = denom > 0 ? Math.round((t.prev - t.assist) / denom * 100) : '';
+    r._faltadosMes      = (r.diasPrevistos !== '' || r.diasAssistidos !== '')
       ? (parseFloat(r.diasPrevistos) || 0) - (parseFloat(r.diasAssistidos) || 0)
       : '';
     r._nota          = calcNota(r);
@@ -1038,8 +1097,8 @@ function _renderDetail(r) {
     `</div></div>` +
     (isDependente ?
       `<div class="detail-section"><div class="detail-section-title">Dependente BRASAS</div><div class="detail-grid">` +
-        dEdit('Unidade do Funcionário', 'dependenteUnidade', 'text') +
-        dEdit('Nome do Funcionário', 'dependenteNome', 'text') +
+        dEdit('Unidade do Funcionário', 'dependenteUnidade', 'select', null, ['', ...FUNCIONARIOS.unidades]) +
+        dEdit('Nome do Funcionário', 'dependenteNome', 'select', null, ['', ...(FUNCIONARIOS.porUnidade[r.dependenteUnidade] || Object.values(FUNCIONARIOS.porUnidade).flat().filter((n,i,a)=>a.indexOf(n)===i).sort())]) +
       `</div></div>` : '') +
     `<div class="detail-section"><div class="detail-section-title">Módulo</div><div class="detail-grid">` +
       dRead('Módulo Atual', dVal('book')) +
@@ -1271,6 +1330,29 @@ function startEdit(td) {
       if (o === val) opt.selected = true;
       input.appendChild(opt);
     });
+  } else if (field === 'dependenteUnidade') {
+    input = document.createElement('select');
+    input.className = 'inline-select';
+    ['', ...FUNCIONARIOS.unidades].forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u; opt.textContent = u || '—';
+      if (u === val) opt.selected = true;
+      input.appendChild(opt);
+    });
+  } else if (field === 'dependenteNome') {
+    const curRow = ALL_ROWS.find(x => x.rowIndex == row);
+    const depUnit = curRow ? (curRow.dependenteUnidade || '') : '';
+    const names = depUnit
+      ? (FUNCIONARIOS.porUnidade[depUnit] || [])
+      : Object.values(FUNCIONARIOS.porUnidade).flat().filter((n,i,a) => a.indexOf(n)===i).sort();
+    input = document.createElement('select');
+    input.className = 'inline-select';
+    ['', ...names].forEach(n => {
+      const opt = document.createElement('option');
+      opt.value = n; opt.textContent = n || '—';
+      if (n === val) opt.selected = true;
+      input.appendChild(opt);
+    });
   } else if (field === 'observacoes' || field === 'obsExtrasEmail') {
     input = document.createElement('textarea');
     input.className = 'inline-input';
@@ -1471,7 +1553,7 @@ function renderChaves(entries) {
       </div>
       <div class="chave-actions" id="actions-${safeId}">
         <button class="chave-btn gen" onclick="gerarPDF('${esc(chave)}', this)">📄 Gerar PDF</button>
-        <button class="chave-btn view" id="view-${safeId}" style="display:none">👁 Ver PDF</button>
+        <button class="chave-btn view" id="view-${safeId}" style="display:none">📂 Drive</button>
         <button class="chave-btn mail" onclick="openEmailModal('${esc(chave)}', this)" ${canMail}>📧 Enviar</button>
       </div>
     </div>`;
@@ -1607,7 +1689,19 @@ function switchTab(tab) {
   document.getElementById('viewAlunos').style.display     = tab === 'alunos'     ? '' : 'none';
   document.getElementById('viewRelatorios').style.display = tab === 'relatorios' ? '' : 'none';
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-  if (tab === 'relatorios') initRelatorios();
+  if (tab === 'relatorios') { initRelatorios(); _syncFiltersToRelatorio(); }
+}
+
+function _syncFiltersToRelatorio() {
+  const anos     = getMS('msAno');
+  const meses    = getMS('msMes');
+  const unidades = getMS('msUnidade');
+  const origens  = getMS('msOrigem');
+  if (anos.length === 1)     { const s = document.getElementById('rAno'); if (s) s.value = anos[0]; }
+  if (meses.length === 1)    { const s = document.getElementById('rMes'); if (s) s.value = meses[0]; }
+  if (unidades.length) _setMS('msRelUnidade', unidades);
+  if (origens.length)  _setMS('msRelOrigem',  origens);
+  buildRelatorios();
 }
 
 // ─── Relatórios ───────────────────────────────────────────────
@@ -1646,6 +1740,7 @@ function buildRelatorios() {
     inArr(r.origemBolsa, origem) &&
     (!aluno || norm(r.nome).includes(aluno))
   );
+  _relFiltered = filtered;
   const groups = {};
   for (const r of filtered) {
     const c = r.chavePDF;
@@ -1682,7 +1777,7 @@ function buildRelatorios() {
       '<td style="padding:9px 12px"><div style="display:flex;gap:6px;flex-wrap:wrap">' +
         '<button class="chave-btn gen" onclick="openPreview(\'' + _ea(chave) + '\')">👁 Prévia</button>' +
         '<button class="chave-btn gen" id="rgen-' + safeId + '" onclick="gerarPDFRel(\'' + _ea(chave) + '\',\'' + safeId + '\',this)">📄 PDF</button>' +
-        '<a class="chave-btn view" id="rview-' + safeId + '" href="' + (hasPDF ? _currentPDFFiles[chave].viewUrl : '#') + '" target="_blank" style="' + (hasPDF ? '' : 'display:none') + '">👁 Ver</a>' +
+        '<a class="chave-btn view" id="rview-' + safeId + '" href="' + (hasPDF ? _currentPDFFiles[chave].viewUrl : '#') + '" target="_blank" style="' + (hasPDF ? '' : 'display:none') + '">📂 Drive</a>' +
         '<button class="chave-btn mail" ' + canMail + ' onclick="openEmailModal(\'' + _ea(chave) + '\',this)">📧 Enviar</button>' +
       '</div></td>' +
     '</tr>';
@@ -1735,7 +1830,8 @@ function abrirSeletorAlunos(chaves) {
   _pdfMergeMode = Array.isArray(chaves) ? chaves.length > 1 : true;
   _pdfChaves    = Array.isArray(chaves) ? chaves : [..._mergeChaves];
 
-  const alunos = FULL_ROWS.filter(r => _pdfChaves.includes(r.chavePDF));
+  const base   = _relFiltered.length ? _relFiltered : FULL_ROWS;
+  const alunos = base.filter(r => _pdfChaves.includes(r.chavePDF));
   const titulo = _pdfMergeMode
     ? `Unir ${_pdfChaves.length} relatórios — ${alunos.length} aluno${alunos.length!==1?'s':''}`
     : `Selecionar alunos — ${alunos.length} aluno${alunos.length!==1?'s':''}`;
@@ -1743,6 +1839,15 @@ function abrirSeletorAlunos(chaves) {
   document.getElementById('alunosModalSub').textContent   = titulo;
   document.getElementById('alunosError').style.display    = 'none';
   document.getElementById('alunosGerarBtn').textContent   = _pdfMergeMode ? '📄 Unir em 1 PDF' : '📄 Gerar PDF';
+
+  const pdfNameRow = document.getElementById('pdfNameRow');
+  const pdfNameInput = document.getElementById('pdfNameInput');
+  if (!_pdfMergeMode && _pdfChaves.length === 1) {
+    pdfNameInput.value = 'Relatório Bolsistas - ' + _pdfChaves[0];
+    pdfNameRow.style.display = '';
+  } else {
+    pdfNameRow.style.display = 'none';
+  }
 
   const grouped = {};
   _pdfChaves.forEach(c => { grouped[c] = []; });
@@ -1772,23 +1877,27 @@ function toggleAllAlunos(checked) {
   document.querySelectorAll('#alunosList .aluno-check').forEach(cb => cb.checked = checked);
 }
 function confirmarGerarPDF() {
-  const excluded = [...document.querySelectorAll('#alunosList .aluno-check:not(:checked)')].map(cb => parseInt(cb.value));
-  const selected = [...document.querySelectorAll('#alunosList .aluno-check:checked')];
-  if (!selected.length) {
+  const selectedSet = new Set([...document.querySelectorAll('#alunosList .aluno-check:checked')].map(cb => parseInt(cb.value)));
+  if (!selectedSet.size) {
     document.getElementById('alunosError').textContent = 'Selecione pelo menos 1 aluno.';
     document.getElementById('alunosError').style.display = 'block';
     return;
   }
   closeModal('alunosModal');
+  // Excluded = todos do FULL_ROWS nessas chaves que NÃO estão marcados
+  const excluded = FULL_ROWS
+    .filter(r => _pdfChaves.includes(r.chavePDF) && !selectedSet.has(r.rowIndex))
+    .map(r => r.rowIndex);
   if (_pdfMergeMode) {
     _execGerarMesclado(_pdfChaves, excluded);
   } else {
-    _execGerarPDF(_pdfChaves[0], excluded);
+    const customTitle = (document.getElementById('pdfNameInput').value || '').trim();
+    _execGerarPDF(_pdfChaves[0], excluded, customTitle);
   }
 }
 
 // ─── Execução real de PDF ─────────────────────────────────────
-function _execGerarPDF(chavePDF, excluded) {
+function _execGerarPDF(chavePDF, excluded, customTitle) {
   const safeId = btoa(unescape(encodeURIComponent(chavePDF))).replace(/=/g,'');
   const genBtn = document.getElementById('rgen-' + safeId);
   if (genBtn) { genBtn.disabled = true; genBtn.textContent = 'Gerando…'; }
@@ -1808,7 +1917,7 @@ function _execGerarPDF(chavePDF, excluded) {
       if (genBtn) { genBtn.disabled = false; genBtn.textContent = '📄 PDF'; }
       toast('Erro: ' + (err.message||err), false);
     })
-    .gerarPDF(TOKEN, chavePDF, JSON.stringify(excluded));
+    .gerarPDF(TOKEN, chavePDF, JSON.stringify(excluded), customTitle || '');
 }
 function _execGerarMesclado(chaves, excluded) {
   toast('Gerando PDF mesclado…', true);
@@ -1833,7 +1942,8 @@ function openPreview(chavePDF) {
   const anoPrev  = parts[0] || '';
   document.getElementById('previewTitle').textContent = 'Prévia — ' + parceiro;
 
-  const rows = FULL_ROWS.filter(r => r.chavePDF === chavePDF);
+  const base = _relFiltered.length ? _relFiltered : FULL_ROWS;
+  const rows = base.filter(r => r.chavePDF === chavePDF);
   if (!rows.length) {
     document.getElementById('previewBody').innerHTML = '<p style="color:var(--gray-400);padding:20px;text-align:center">Nenhum aluno encontrado.</p>';
     openModal('previewModal'); return;
@@ -1949,8 +2059,12 @@ function openPreview(chavePDF) {
       <button onclick="toggleAllAlunos(true)" style="font-size:.78rem;padding:4px 12px;border:1px solid var(--gray-200);border-radius:4px;cursor:pointer;background:white;color:var(--gray-600)">Marcar todos</button>
       <button onclick="toggleAllAlunos(false)" style="font-size:.78rem;padding:4px 12px;border:1px solid var(--gray-200);border-radius:4px;cursor:pointer;background:white;color:var(--gray-600)">Desmarcar todos</button>
     </div>
-    <div id="alunosList" style="max-height:52vh;overflow:auto;border:1px solid var(--gray-100);border-radius:6px"></div>
+    <div id="alunosList" style="max-height:45vh;overflow:auto;border:1px solid var(--gray-100);border-radius:6px"></div>
     <div class="modal-error-box" id="alunosError"></div>
+    <div id="pdfNameRow" style="display:none;margin-top:14px">
+      <label style="font-size:.78rem;color:var(--gray-600);display:block;margin-bottom:4px;font-weight:500">Nome do arquivo PDF</label>
+      <input id="pdfNameInput" type="text" style="width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;font-size:.83rem;color:var(--gray-700);outline:none" onfocus="this.style.borderColor='var(--navy-400)'" onblur="this.style.borderColor='var(--gray-200)'">
+    </div>
     <div class="modal-actions" style="margin-top:16px">
       <button class="modal-cancel" onclick="closeModal('alunosModal')">Cancelar</button>
       <button class="modal-primary" id="alunosGerarBtn" onclick="confirmarGerarPDF()">📄 Gerar PDF</button>
