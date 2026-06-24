@@ -1051,6 +1051,7 @@ function _logEdicao(ss, ctx, rowIndex, field, oldVal, newVal, email) {
       log = ss.insertSheet('log_edicoes');
       log.appendRow(['Timestamp','E-mail','Aluno','Unidade','Mês','Ano','Campo','Anterior','Novo','Linha']);
       log.setFrozenRows(1);
+      log.getRange('E:F').setNumberFormat('@'); // evita auto-conversão de "Maio" → Date
     }
     const fmt = v => {
       if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'dd/MM/yyyy');
@@ -1074,6 +1075,9 @@ function getEditLog(token) {
     const data = log.getDataRange().getValues();
     if (data.length < 2) return JSON.stringify({ ok: true, rows: [] });
     const tz = Session.getScriptTimeZone();
+    const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    const fmtMes = v => v instanceof Date ? MESES_PT[v.getMonth()] : String(v || '');
+    const fmtAno = v => v instanceof Date ? String(v.getFullYear())  : String(v || '');
     const rows = [];
     for (let i = 1; i < data.length; i++) {
       const r = data[i];
@@ -1082,8 +1086,8 @@ function getEditLog(token) {
         email:    String(r[1] || ''),
         nome:     String(r[2] || ''),
         unidade:  String(r[3] || ''),
-        mes:      String(r[4] || ''),
-        ano:      String(r[5] || ''),
+        mes:      fmtMes(r[4]),
+        ano:      fmtAno(r[5]),
         campo:    String(r[6] || ''),
         anterior: String(r[7] || ''),
         novo:     String(r[8] || ''),
