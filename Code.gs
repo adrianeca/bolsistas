@@ -8,8 +8,9 @@ const FUNCIONARIOS_SHEET_ID   = '1BDiPjv0FqRJp5EwcvLdYXVvEAWesvwdEgbhYdnTlqPY';
 
 // Logos: (1) Suba "Brasas logo.png" no Drive, copie o ID da URL e cole aqui.
 // (2) Logos dos parceiros ficam na pasta abaixo com nome = Origem da Bolsa (qualquer extensão).
-const BRASAS_LOGO_FILE_ID      = '1fqZbnxHJNyov_9NwhwDAg235FizcnTGQ';
-const PARTNER_LOGOS_FOLDER_ID  = '1sKrz_-odKjx6YNVCSWpB5eW9v3atEvQD';
+const BRASAS_LOGO_FILE_ID       = '1fqZbnxHJNyov_9NwhwDAg235FizcnTGQ'; // logo usada no PDF
+const BRASAS_EMAIL_LOGO_FILE_ID = '1F-0NV036KUExaEGIMgLbUHqE-HtYyXvK'; // logo usada no corpo do e-mail
+const PARTNER_LOGOS_FOLDER_ID   = '1sKrz_-odKjx6YNVCSWpB5eW9v3atEvQD';
 
 const EDIT_ROLES       = ['admin', 'secretaria', 'diretor', 'b2b', 'operacional'];
 const EMAIL_ROLES      = ['admin', 'b2b'];
@@ -75,6 +76,7 @@ function _getUser(token) {
       isAdmin:           ADMIN_ROLES.includes(role),
       canViewAlunos:     access.canViewAlunos,
       canViewRelatorios: access.canViewRelatorios,
+      canViewHistorico:  access.canViewHistorico,
     };
 
     try { cache.put(cacheKey, JSON.stringify(userObj), 600); } catch(e) {}
@@ -115,9 +117,10 @@ function _hasAccess(ss, role, email) {
     const hasFull = acessos.includes('bolsistas');
     const canViewAlunos      = hasFull || acessos.includes('bolsistas_alunos');
     const canViewRelatorios  = hasFull || acessos.includes('bolsistas_relatorios');
+    const canViewHistorico   = hasFull || acessos.includes('bolsistas_historico');
 
     if (!canViewAlunos && !canViewRelatorios) return null;
-    return { canViewAlunos, canViewRelatorios };
+    return { canViewAlunos, canViewRelatorios, canViewHistorico };
   }
 
   return null;
@@ -224,7 +227,7 @@ function initApp(token) {
       rows.push({
         rowIndex:          i + 1,
         timestamp:         _fmtDate(r[0]),
-        emailSecretaria:   String(r[1]  || ''),
+        editadoWebapp:     !!r[32],
         unidade,
         mes,
         ano,
@@ -255,6 +258,7 @@ function initApp(token) {
         diasAula:          r[29] !== '' ? r[29] : '',
         teste1:            r[30] !== '' ? r[30] : '',
         teste2:            r[31] !== '' ? r[31] : '',
+        emailEnviado:      !!r[33],
       });
     }
 
@@ -279,6 +283,11 @@ function initApp(token) {
   } catch (e) {
     return JSON.stringify({ ok: false, error: e.message });
   }
+}
+
+function reloadApp(token) {
+  try { CacheService.getScriptCache().remove('appdata_v3_' + token); } catch(e) {}
+  return initApp(token);
 }
 
 // ─── Leitura de dados ────────────────────────────────────────
@@ -325,7 +334,7 @@ function getBolsistasData(token, paramsJson) {
       rows.push({
         rowIndex:          i + 1,
         timestamp:         _fmtDate(r[0]),
-        emailSecretaria:   String(r[1]  || ''),
+        editadoWebapp:     !!r[32],
         unidade,
         mes,
         ano,
@@ -356,6 +365,7 @@ function getBolsistasData(token, paramsJson) {
         diasAula:          r[29] !== '' ? r[29] : '',
         teste1:            r[30] !== '' ? r[30] : '',
         teste2:            r[31] !== '' ? r[31] : '',
+        emailEnviado:      !!r[33],
       });
     }
 
@@ -465,20 +475,27 @@ function updateBolsista(token, payloadJson) {
     const ss    = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
     const sheet = ss.getSheetByName('Bolsistas App');
 
+    // Lê contexto da linha (nome, unidade, mês, ano) + valor anterior em uma chamada
+    const ctxRange = Math.max(col, 6);
+    const ctx      = sheet.getRange(rowIndex, 1, 1, ctxRange).getValues()[0];
+    const oldValue = ctx[col - 1];
+
     // Valida acesso à unidade do row para não-admin
     if (!user.isAdmin && user.unidade) {
-      const rowData = sheet.getRange(rowIndex, 3, 1, 1).getValue();
       const norm    = s => String(s || '').trim().toLowerCase()
         .normalize('NFD').replace(/[̀-ͯ]/g, '');
       const permitidas = user.unidade.split(/[,|]/).map(s => norm(s.trim()));
-      if (!permitidas.includes(norm(String(rowData)))) {
+      if (!permitidas.includes(norm(String(ctx[2])))) {
         throw new Error('Sem acesso a esta unidade.');
       }
     }
 
     sheet.getRange(rowIndex, col).setValue(value);
     sheet.getRange(rowIndex, 1).setValue(new Date());
-    sheet.getRange(rowIndex, 2).setValue(user.email);
+    sheet.getRange(rowIndex, 33).setValue(true); // coluna dedicada ao flag "editado via webapp"
+
+    // Log de edição
+    _logEdicao(ss, ctx, rowIndex, field, oldValue, value, user.email);
 
     // Invalida cache de dados para que o próximo carregamento reflita a edição
     try { CacheService.getScriptCache().remove('appdata_v3_' + token); } catch(e) {}
@@ -842,7 +859,7 @@ function _buildPDFSection(body, rows, origemBolsa, mes, ano, isFirst, customOrig
   const partnerBlob = _getPartnerLogoBlob(origemBolsa);
   if (partnerBlob && brasasAdded) {
     try {
-      logoPara.appendText('  ');
+      logoPara.appendText('          ');
       const pImg = logoPara.appendInlineImage(partnerBlob);
       const pw = pImg.getWidth(), ph = pImg.getHeight();
       const ps = Math.min(LOGO_MAX_W / pw, LOGO_MAX_H / ph);
@@ -854,7 +871,7 @@ function _buildPDFSection(body, rows, origemBolsa, mes, ano, isFirst, customOrig
   const cTit = hdrTbl.getCell(0, 1);
   const displayOrigem = (customOrigemBolsa || '').trim() || origemBolsa;
   cTit.editAsText().setText('RELATÓRIO DE BOLSISTAS').setBold(true).setFontSize(22).setFontFamily('Arial').setForegroundColor(NAVY);
-  const subPara = cTit.appendParagraph(displayOrigem + '  ·  ' + mes + ' / ' + ano);
+  const subPara = cTit.appendParagraph(displayOrigem + '  ·  ' + mes + ' - ' + ano);
   subPara.editAsText().setFontSize(13).setFontFamily('Arial').setBold(false).setForegroundColor(STEEL);
   for (let ci = 0; ci < cTit.getNumChildren(); ci++) {
     const ch = cTit.getChild(ci);
@@ -863,43 +880,56 @@ function _buildPDFSection(body, rows, origemBolsa, mes, ano, isFirst, customOrig
   }
   // Card de alunos: compacto e centralizado
   // Tabela espaçador 3-col (sem borda) → célula central tem tabela interna com borda
-  cTit.appendParagraph('').editAsText().setFontSize(4);
-  const spacerTbl = cTit.appendTable([['', '', '']]);
-  spacerTbl.setBorderWidth(0);
-  spacerTbl.getRow(0).getCell(0).setWidth(114);  // espaçador esq
-  spacerTbl.getRow(0).getCell(2).setWidth(114);  // espaçador dir
-  const midCell = spacerTbl.getRow(0).getCell(1);
-  midCell.setWidth(200);                          // 114+200+114=428 ✓
-  midCell.editAsText().setText('').setFontSize(1);
-  const cardNested = midCell.appendTable([['']]);
-  cardNested.setBorderWidth(1);
-  const cardCell = cardNested.getCell(0, 0);
-  cardCell.editAsText().setText('Quantidade de Alunos')
-    .setFontSize(8).setFontFamily('Arial').setBold(false).setForegroundColor(GRAY);
-  cardCell.getChild(0).asParagraph().setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-  const numPara = cardCell.appendParagraph(String(rows.length));
-  numPara.editAsText().setFontSize(20).setFontFamily('Arial').setBold(true).setForegroundColor(NAVY);
-  numPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  // Valor total das bolsas (col Q = índice 16)
+  const totalValor = rows.reduce((s, r) => s + (parseFloat(r[16]) || 0), 0);
+  const fmtValor = totalValor > 0
+    ? 'R$ ' + totalValor.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+    : '—';
 
-  // Direita: legenda e conceito lado a lado (tabela aninhada 2 colunas)
-  // 249 + 249 = 498 dentro da coluna de 500pt
+  cTit.appendParagraph('').editAsText().setFontSize(4);
+  // Dois cards lado a lado: [14|190 card1|10 gap|190 card2|24] = 428 ✓
+  const cardsTbl = cTit.appendTable([['', '', '', '', '']]);
+  cardsTbl.setBorderWidth(0);
+  cardsTbl.getRow(0).getCell(0).setWidth(14);
+  cardsTbl.getRow(0).getCell(1).setWidth(190);
+  cardsTbl.getRow(0).getCell(2).setWidth(10);
+  cardsTbl.getRow(0).getCell(3).setWidth(190);
+  cardsTbl.getRow(0).getCell(4).setWidth(24);
+
+  function _makeCard(cell, label, value, vSize) {
+    cell.editAsText().setText('').setFontSize(1);
+    const nc = cell.appendTable([['']]);
+    nc.setBorderWidth(0.5);
+    const cc = nc.getCell(0, 0);
+    cc.editAsText().setText(label)
+      .setFontSize(11).setFontFamily('Arial').setBold(false).setForegroundColor(GRAY);
+    cc.getChild(0).asParagraph().setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    const vp = cc.appendParagraph(String(value));
+    vp.editAsText().setFontSize(vSize || 20).setFontFamily('Arial').setBold(true).setForegroundColor(NAVY);
+    vp.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  }
+  _makeCard(cardsTbl.getRow(0).getCell(1), 'Total de Alunos',      rows.length, 20);
+  _makeCard(cardsTbl.getRow(0).getCell(3), 'Valor Total em Bolsa', fmtValor,    20);
+
+  // Direita: espaçador + legenda + conceito  (160 + 170 + 170 = 500pt)
   const cLeg = hdrTbl.getCell(0, 2);
   cLeg.editAsText().setText('').setFontSize(1);
-  const legNested = cLeg.appendTable([['', '']]);
+  const legNested = cLeg.appendTable([['', '', '']]);
   legNested.setBorderWidth(0);
-  legNested.getRow(0).getCell(0).setWidth(249);
-  legNested.getRow(0).getCell(1).setWidth(249);
+  legNested.getRow(0).getCell(0).setWidth(160); // espaçador
+  legNested.getRow(0).getCell(1).setWidth(170);
+  legNested.getRow(0).getCell(2).setWidth(170);
 
-  const cAbbr = legNested.getRow(0).getCell(0);
-  cAbbr.editAsText().setText('Legenda:').setBold(true).setFontSize(10).setFontFamily('Arial').setForegroundColor(NAVY);
+  const cAbbr = legNested.getRow(0).getCell(1);
+  cAbbr.editAsText().setText('Legenda:').setBold(true).setFontSize(11).setFontFamily('Arial').setForegroundColor(NAVY);
   ['MT - Midterm Test', 'WT - Written Test', 'OC - Oral Comprehension', 'OT - Oral Test', 'T1 - Teste 1', 'T2 - Teste 2'].forEach(function(t) {
-    cAbbr.appendParagraph(t).editAsText().setFontSize(9).setFontFamily('Arial').setBold(false).setForegroundColor(STEEL);
+    cAbbr.appendParagraph(t).editAsText().setFontSize(10).setFontFamily('Arial').setBold(false).setForegroundColor(STEEL);
   });
 
-  const cConc = legNested.getRow(0).getCell(1);
-  cConc.editAsText().setText('Conceito:').setBold(true).setFontSize(10).setFontFamily('Arial').setForegroundColor(NAVY);
+  const cConc = legNested.getRow(0).getCell(2);
+  cConc.editAsText().setText('Conceito:').setBold(true).setFontSize(11).setFontFamily('Arial').setForegroundColor(NAVY);
   ['E - Excelente', 'MB - Muito Bom', 'B - Bom', 'R - Regular', 'I - Insuficiente', 'N - Nulo'].forEach(function(t) {
-    cConc.appendParagraph(t).editAsText().setFontSize(9).setFontFamily('Arial').setBold(false).setForegroundColor(STEEL);
+    cConc.appendParagraph(t).editAsText().setFontSize(10).setFontFamily('Arial').setBold(false).setForegroundColor(STEEL);
   });
 
   body.appendParagraph('').editAsText().setFontSize(3);
@@ -934,7 +964,11 @@ function _buildPDFSection(body, rows, origemBolsa, mes, ano, isFirst, customOrig
     const falta = (r[14] !== '' || r[15] !== '')
       ? String((parseFloat(r[14]) || 0) - (parseFloat(r[15]) || 0)) : '';
 
-    const diasAulaStr = String(r[29] || '').trim();
+    const diasAulaStr = String(r[29] || '').trim()
+      .replace(/segunda(-feira)?/gi, 'Seg').replace(/ter[çc]a(-feira)?/gi, 'Ter')
+      .replace(/quarta(-feira)?/gi, 'Qua').replace(/quinta(-feira)?/gi, 'Qui')
+      .replace(/sexta(-feira)?/gi, 'Sex').replace(/s[áa]bado/gi, 'Sáb')
+      .replace(/domingo/gi, 'Dom');
     const freqHorDias = (r[10] || '') + ' / ' + (r[13] || '') +
       (diasAulaStr ? '\n' + diasAulaStr : '');
 
@@ -968,16 +1002,13 @@ function _buildPDFSection(body, rows, origemBolsa, mes, ano, isFirst, customOrig
 
   // Larguras somando 1428 pts (página 1500 - margens 36×2)
   const colWidths = [135,68,38,80,120,62,75,75,46,46,46,68,33,33,33,33,33,33,60,58,253];
-  // Grupo de cada coluna (alterna NAVY / NAVY_B no cabeçalho para separação visual)
-  // G0: Aluno,Unidade,%Bolsa,Módulo | G1: Freq,Data1ªAula,InícioMód,PrevConc
-  // G2: AulasPrev,AulasAssist,Faltas,Valor | G3: T1,T2,MT,WT,OC,OT
-  // G4: MédiaFinal,Conceito | G5: Observações
-  const colGroup = [0,0,0,0, 1,1,1,1, 2,2,2,2, 3,3,3,3,3,3, 4,4, 5];
   const hRow = table.getRow(0);
   for (let c = 0; c < hdrs.length; c++) {
-    hRow.getCell(c).setBackgroundColor(colGroup[c] % 2 === 0 ? NAVY : NAVY_B)
+    const hCell = hRow.getCell(c);
+    hCell.setBackgroundColor(NAVY)
       .editAsText().setForegroundColor(WHITE).setBold(true).setFontSize(10).setFontFamily('Arial');
-    if (colWidths[c]) hRow.getCell(c).setWidth(colWidths[c]);
+    hCell.getChild(0).asParagraph().setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+    if (colWidths[c]) hCell.setWidth(colWidths[c]);
   }
   for (let ri = 1; ri < table.getNumRows(); ri++) {
     for (let c = 0; c < hdrs.length; c++) {
@@ -987,6 +1018,82 @@ function _buildPDFSection(body, rows, origemBolsa, mes, ano, isFirst, customOrig
     }
   }
 
+}
+
+// ─── URL da pasta raiz de relatórios ────────────────────────
+function getRelatoriosFolderUrl(token) {
+  try {
+    _getUser(token);
+    const folders = DriveApp.getFoldersByName('Relatórios Bolsistas');
+    if (!folders.hasNext()) return JSON.stringify({ ok: false, error: 'Pasta não encontrada.' });
+    const folder = folders.next();
+    return JSON.stringify({ ok: true, url: folder.getUrl() });
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
+}
+
+// ─── Log de edições ──────────────────────────────────────────
+const _FIELD_LABELS = {
+  data1aAula:'Data 1ª Aula', frequencia:'Frequência', dataInicioBook:'Início do Módulo',
+  dataPrevConclusao:'Prev. Conclusão', horario:'Horário', diasPrevistos:'Aulas Previstas',
+  diasAssistidos:'Aulas Assistidas', valor:'Valor', mt:'MT', wt:'WT', oc:'OC', ot:'OT',
+  aproveitamento:'Aproveitamento', observacoes:'Observações', turma:'Turma',
+  dependenteUnidade:'Dep. Unidade', dependenteNome:'Dep. Nome',
+  obsExtrasEmail:'Obs. E-mail', statusAluno:'Status', diasAula:'Dias de Aula',
+  teste1:'Teste 1', teste2:'Teste 2',
+};
+
+function _logEdicao(ss, ctx, rowIndex, field, oldVal, newVal, email) {
+  try {
+    let log = ss.getSheetByName('log_edicoes');
+    if (!log) {
+      log = ss.insertSheet('log_edicoes');
+      log.appendRow(['Timestamp','E-mail','Aluno','Unidade','Mês','Ano','Campo','Anterior','Novo','Linha']);
+      log.setFrozenRows(1);
+    }
+    const fmt = v => {
+      if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+      return v !== null && v !== undefined ? String(v) : '';
+    };
+    log.appendRow([
+      new Date(), email,
+      String(ctx[5] || ''), String(ctx[2] || ''), String(ctx[3] || ''), String(ctx[4] || ''),
+      _FIELD_LABELS[field] || field, fmt(oldVal), fmt(newVal), rowIndex,
+    ]);
+  } catch(e) { /* silencioso: log não deve quebrar o save */ }
+}
+
+function getEditLog(token) {
+  try {
+    const user = _getUser(token);
+    if (!user.isAdmin && !user.canViewHistorico) throw new Error('Sem permissão.');
+    const ss  = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+    const log = ss.getSheetByName('log_edicoes');
+    if (!log) return JSON.stringify({ ok: true, rows: [] });
+    const data = log.getDataRange().getValues();
+    if (data.length < 2) return JSON.stringify({ ok: true, rows: [] });
+    const tz = Session.getScriptTimeZone();
+    const rows = [];
+    for (let i = 1; i < data.length; i++) {
+      const r = data[i];
+      rows.push({
+        ts:       r[0] instanceof Date ? Utilities.formatDate(r[0], tz, 'dd/MM/yyyy HH:mm') : String(r[0] || ''),
+        email:    String(r[1] || ''),
+        nome:     String(r[2] || ''),
+        unidade:  String(r[3] || ''),
+        mes:      String(r[4] || ''),
+        ano:      String(r[5] || ''),
+        campo:    String(r[6] || ''),
+        anterior: String(r[7] || ''),
+        novo:     String(r[8] || ''),
+      });
+    }
+    rows.reverse(); // mais recentes primeiro
+    return JSON.stringify({ ok: true, rows });
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
 }
 
 // ─── Salva PDF no Drive (helper interno) ─────────────────────
@@ -1016,6 +1123,25 @@ function _savePDF(docId, docTitle, origemBolsa) {
     fileName: pdfFile.getName(),
     viewUrl:  pdfFile.getUrl(),
   });
+}
+
+// ─── Log de PDFs gerados ─────────────────────────────────────
+function _logPDF(ss, tipo, origemBolsa, mes, ano, titulo, fileId, viewUrl, email, chavePDF) {
+  try {
+    let log = ss.getSheetByName('log_pdfs');
+    if (!log) {
+      log = ss.insertSheet('log_pdfs');
+      log.appendRow(['Timestamp','GeradoPor','Tipo','OrigemBolsa','Mês','Ano','Título','FileId','ViewUrl','ChavePDF']);
+      log.setFrozenRows(1);
+      // Força colunas Mês (E) e Ano (F) como texto — evita auto-conversão de "Maio" → Date
+      log.getRange('E:F').setNumberFormat('@');
+    }
+    const nextRow = log.getLastRow() + 1;
+    // Pré-formata Mês(col E) e Ano(col F) como texto antes de escrever — evita auto-conversão
+    const rng = log.getRange(nextRow, 1, 1, 10);
+    rng.setNumberFormats([['dd/MM/yyyy HH:mm','@','@','@','@','@','@','@','@','@']]);
+    rng.setValues([[new Date(), email, tipo, origemBolsa, mes, ano, titulo, fileId, viewUrl, chavePDF || '']]);
+  } catch(e) { /* silencioso */ }
 }
 
 // ─── Geração de PDF (parceiro único) ─────────────────────────
@@ -1051,14 +1177,19 @@ function gerarPDF(token, chavePDF, excludedRowsJson, customTitle, customOrigemBo
 
     _buildPDFSection(body, rows, origemBolsa, mes, ano, true, customOrigemBolsa || '');
     doc.saveAndClose();
-    return _savePDF(doc.getId(), docTitle, origemBolsa);
+    const result = JSON.parse(_savePDF(doc.getId(), docTitle, origemBolsa));
+    if (result.ok) {
+      const labelOrigem = (customOrigemBolsa || '').trim() || origemBolsa;
+      _logPDF(ss, 'individual', labelOrigem, mes, ano, docTitle, result.fileId, result.viewUrl, user.email, chavePDF);
+    }
+    return JSON.stringify(result);
   } catch (e) {
     return JSON.stringify({ ok: false, error: e.message });
   }
 }
 
-// ─── Geração de PDF mesclado (múltiplos parceiros) ───────────
-function gerarPDFMesclado(token, chavesJSON, excludedRowsJson) {
+// ─── Geração de PDF mesclado (múltiplos parceiros — tabela única) ───────────
+function gerarPDFMesclado(token, chavesJSON, excludedRowsJson, customTitle, customOrigemBolsa, customFolderName) {
   try {
     const user     = _getUser(token);
     if (!user.canSendEmail) throw new Error('Sem permissão para gerar PDF.');
@@ -1077,25 +1208,42 @@ function gerarPDFMesclado(token, chavesJSON, excludedRowsJson) {
       if (byChave[chave] !== undefined && !excluded.has(i + 1)) byChave[chave].push(data[i]);
     }
 
-    const docTitle = `Relatório Bolsistas — Mesclado (${chaves.length} parceiros)`;
+    // Reúne todas as linhas em uma só lista; coleta meses/anos distintos para subtítulo
+    const allRows   = [];
+    const seenMeses = [];
+    const seenAnos  = [];
+    chaves.forEach(chave => {
+      const rows = byChave[chave] || [];
+      if (!rows.length) return;
+      const parts = chave.split(' - ');
+      const m = parts[1] || '', a = parts[0] || '';
+      if (m && !seenMeses.includes(m)) seenMeses.push(m);
+      if (a && !seenAnos.includes(a))  seenAnos.push(a);
+      allRows.push(...rows);
+    });
+    if (!allRows.length) throw new Error('Nenhum aluno selecionado.');
+
+    const combinedMes = seenMeses.join(', ');
+    const combinedAno = seenAnos.join(', ');
+
+    const docTitle = (customTitle || '').trim() || `Relatório Bolsistas — Mesclado (${chaves.length} parceiros)`;
     const doc  = DocumentApp.create(docTitle);
     const body = doc.getBody();
     body.clear();
     body.setPageWidth(1500).setPageHeight(850);
     body.setMarginTop(28).setMarginBottom(28).setMarginLeft(36).setMarginRight(36);
 
-    let first = true;
-    chaves.forEach(chave => {
-      const rows = byChave[chave] || [];
-      if (!rows.length) return;
-      const origemBolsa = String(rows[0][7] || '').trim();
-      const parts = chave.split(' - ');
-      _buildPDFSection(body, rows, origemBolsa, parts[1] || '', parts[0] || '', first);
-      first = false;
-    });
+    // Uma única seção com todos os alunos na mesma tabela
+    _buildPDFSection(body, allRows, '', combinedMes, combinedAno, true, customOrigemBolsa || '');
 
     doc.saveAndClose();
-    return _savePDF(doc.getId(), docTitle, 'Mesclado');
+    const folderName = (customFolderName || '').trim() || 'Mesclado';
+    const result = JSON.parse(_savePDF(doc.getId(), docTitle, folderName));
+    if (result.ok) {
+      const labelOrigem = (customOrigemBolsa || '').trim() || ('Mesclado (' + chaves.length + ' parceiros)');
+      _logPDF(ss, 'mesclado', labelOrigem, combinedMes, combinedAno, docTitle, result.fileId, result.viewUrl, user.email, '');
+    }
+    return JSON.stringify(result);
   } catch (e) {
     return JSON.stringify({ ok: false, error: e.message });
   }
@@ -1107,7 +1255,7 @@ function enviarEmail(token, payloadJson) {
     const user = _getUser(token);
     if (!user.canSendEmail) throw new Error('Sem permissão para enviar e-mails.');
 
-    const { chavePDF, fileId, obsExtra } = JSON.parse(payloadJson);
+    const { chavePDF, fileId, obsExtra, toOverride, ccOverride } = JSON.parse(payloadJson);
 
     const ss    = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
     const sheet = ss.getSheetByName('Bolsistas App');
@@ -1128,23 +1276,28 @@ function enviarEmail(token, payloadJson) {
     const ano         = parts[0] || '';
     const mes         = parts[1] || '';
 
-    // Destinatários
-    const parcSheet = ss.getSheetByName('Parceiros');
+    // Destinatários: usa override do frontend se preenchido, senão busca na aba Parceiros
     let to = '', cc = '';
-    if (parcSheet) {
-      const pd = parcSheet.getDataRange().getValues();
-      for (let i = 1; i < pd.length; i++) {
-        if (String(pd[i][0] || '').trim() !== origemBolsa) continue;
-        to = String(pd[i][2] || '').trim();
-        cc = [pd[i][3], pd[i][4]].map(e => String(e || '').trim()).filter(Boolean).join(',');
-        break;
+    if (toOverride && toOverride.trim()) {
+      to = toOverride.trim();
+      cc = (ccOverride || '').trim();
+    } else {
+      const parcSheet = ss.getSheetByName('Parceiros');
+      if (parcSheet) {
+        const pd = parcSheet.getDataRange().getValues();
+        for (let i = 1; i < pd.length; i++) {
+          if (String(pd[i][0] || '').trim() !== origemBolsa) continue;
+          to = String(pd[i][2] || '').trim();
+          cc = [pd[i][3], pd[i][4]].map(e => String(e || '').trim()).filter(Boolean).join(',');
+          break;
+        }
       }
+      if (!to) throw new Error('E-mail do parceiro não encontrado para: ' + origemBolsa);
     }
-    if (!to) throw new Error('E-mail do parceiro não encontrado para: ' + origemBolsa);
 
     // CCs fixos sempre incluídos
     const fixedCC = ['adriane@brasas.com', 'administrativo@brasas.com'];
-    const allCC   = [...(cc ? cc.split(',') : []), ...fixedCC].filter(Boolean);
+    const allCC   = [...new Set([...(cc ? cc.split(',').map(e=>e.trim()).filter(Boolean) : []), ...fixedCC])];
     cc = allCC.join(',');
 
     // Anexo PDF
@@ -1153,8 +1306,18 @@ function enviarEmail(token, payloadJson) {
       attachments.push(DriveApp.getFileById(fileId).getAs('application/pdf'));
     }
 
+    // Logo BRASAS como imagem inline (cid:)
+    const inlineImages = {};
+    let logoSrc = '';
+    try {
+      const lb = DriveApp.getFileById(BRASAS_EMAIL_LOGO_FILE_ID).getBlob();
+      lb.setName('brasasLogo');
+      inlineImages.brasasLogo = lb;
+      logoSrc = 'cid:brasasLogo';
+    } catch(e) { /* sem logo — fallback para texto */ }
+
     const subject  = `Relatório de Frequência e Aproveitamento - BRASAS - ${origemBolsa}`;
-    const htmlBody = _buildEmailHtml(origemBolsa, mes, ano, rows, obsExtra);
+    const htmlBody = _buildEmailHtml(origemBolsa, mes, ano, obsExtra, logoSrc);
 
     GmailApp.sendEmail(to, subject, '', {
       htmlBody,
@@ -1162,11 +1325,12 @@ function enviarEmail(token, payloadJson) {
       attachments,
       name:        'Administrativo BRASAS',
       replyTo:     'administrativo@brasas.com',
+      inlineImages: Object.keys(inlineImages).length ? inlineImages : undefined,
     });
 
-    // Marca envio nas linhas (col AA = index 27)
+    // Marca envio nas linhas (col AH = 34 — coluna dedicada, sem conflito com dados)
     for (const ri of rowIndexes) {
-      sheet.getRange(ri, 27).setValue(true);
+      sheet.getRange(ri, 34).setValue(true);
     }
 
     return JSON.stringify({ ok: true, to, cc });
@@ -1175,94 +1339,110 @@ function enviarEmail(token, payloadJson) {
   }
 }
 
-function _buildEmailHtml(origemBolsa, mes, ano, rows, obsExtra) {
-  const td  = (v, center, bold) =>
-    `<td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;${center?'text-align:center;':''}${bold?'font-weight:700;':''}">${v}</td>`;
-
-  const rowsHtml = rows.map((r, idx) => {
-    const wt = parseFloat(r[18]), oc = parseFloat(r[19]), ot = parseFloat(r[20]);
-    const mt = parseFloat(r[17]);
-    let nota = '';
-    if (!isNaN(wt) && !isNaN(oc) && !isNaN(ot)) nota = ((wt + oc + ot) / 3).toFixed(1);
-    else if (!isNaN(mt)) nota = Number(mt).toFixed(1);
-    const notaN = parseFloat(nota);
-    const dias  = parseFloat(r[15]);
-    let aprov   = String(r[21] || '');
-    if (nota !== '') {
-      if (!isNaN(dias) && dias <= 1) aprov = 'N';
-      else if (notaN >= 90) aprov = 'E';
-      else if (notaN >= 80) aprov = 'MB';
-      else if (notaN >= 70) aprov = 'B';
-      else if (notaN >= 60) aprov = 'R';
-      else aprov = 'I';
+// ─── PDFs Gerados ────────────────────────────────────────────
+function getPDFsGerados(token) {
+  try {
+    _getUser(token);
+    const ss  = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+    const log = ss.getSheetByName('log_pdfs');
+    if (!log) return JSON.stringify({ ok: true, rows: [] });
+    const data = log.getDataRange().getValues();
+    if (data.length < 2) return JSON.stringify({ ok: true, rows: [] });
+    const tz = Session.getScriptTimeZone();
+    const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    const fmtMes = v => v instanceof Date ? MESES_PT[v.getMonth()] : String(v || '');
+    const fmtAno = v => v instanceof Date ? String(v.getFullYear())  : String(v || '');
+    const rows = [];
+    for (let i = 1; i < data.length; i++) {
+      const r = data[i];
+      if (!r[7]) continue; // sem fileId — linha inválida
+      rows.push({
+        ts:          r[0] instanceof Date ? Utilities.formatDate(r[0], tz, 'dd/MM/yyyy HH:mm') : String(r[0]||''),
+        geradoPor:   String(r[1]||''),
+        tipo:        String(r[2]||''),
+        origemBolsa: String(r[3]||''),
+        mes:         fmtMes(r[4]),
+        ano:         fmtAno(r[5]),
+        titulo:      String(r[6]||''),
+        fileId:      String(r[7]||''),
+        viewUrl:     String(r[8]||''),
+        chavePDF:    String(r[9]||''),
+      });
     }
-    const falta = (r[14] !== '' || r[15] !== '')
-      ? String((parseFloat(r[14])||0) - (parseFloat(r[15])||0)) : '';
+    rows.reverse();
+    return JSON.stringify({ ok: true, rows });
+  } catch(e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
+}
 
-    return `<tr style="background:${idx % 2 === 0 ? '#fff' : '#f8fafc'}">
-      ${td(`<b style="color:#1d3557">${r[2]}</b> — ${r[5]}`)}
-      ${td(r[6] !== '' ? r[6] + '%' : '', true)}
-      ${td(r[9] || '', true)}
-      ${td((r[10]||'') + (r[13] ? '<br><span style="font-size:11px;color:#64748b">'+r[13]+'</span>' : ''), true)}
-      ${td(r[14] !== '' ? String(r[14]) : '', true)}
-      ${td(r[15] !== '' ? String(r[15]) : '', true)}
-      ${td(falta, true)}
-      ${td(r[30] !== '' ? String(r[30]) : '', true)}
-      ${td(r[31] !== '' ? String(r[31]) : '', true)}
-      ${td(r[17] !== '' ? String(r[17]) : '', true)}
-      ${td(r[18] !== '' ? String(r[18]) : '', true)}
-      ${td(r[19] !== '' ? String(r[19]) : '', true)}
-      ${td(r[20] !== '' ? String(r[20]) : '', true)}
-      ${td(nota, true)}
-      ${td(aprov, true, true)}
-      ${td(`<span style="font-size:11px;color:#475569">${r[22] || ''}</span>`)}
-    </tr>`;
-  }).join('');
+// ─── Envio de e-mail (PDF mesclado — destinatário livre) ─────
+function enviarEmailMesclado(token, payloadJson) {
+  try {
+    const user = _getUser(token);
+    if (!user.canSendEmail) throw new Error('Sem permissão para enviar e-mails.');
+    const { fileId, to, cc, origemBolsa, mes, ano, obsExtra } = JSON.parse(payloadJson);
+    if (!to)     throw new Error('Destinatário não informado.');
+    if (!fileId) throw new Error('PDF não encontrado.');
 
-  const obsBlock = obsExtra
-    ? `<div style="margin:20px 0 0;padding:14px 18px;background:#f8fafc;border-left:3px solid #1d3557;border-radius:0 6px 6px 0;font-size:13px;color:#475569"><b>Observações:</b> ${obsExtra}</div>`
+    const fixedCC = ['adriane@brasas.com', 'administrativo@brasas.com'];
+    const extraCC = cc ? cc.split(',').map(e => e.trim()).filter(Boolean) : [];
+    const ccFinal = [...new Set([...extraCC, ...fixedCC])].join(',');
+
+    const inlineImages = {};
+    let logoSrc = '';
+    try {
+      const lb = DriveApp.getFileById(BRASAS_EMAIL_LOGO_FILE_ID).getBlob();
+      lb.setName('brasasLogo');
+      inlineImages.brasasLogo = lb;
+      logoSrc = 'cid:brasasLogo';
+    } catch(e) {}
+
+    const subject  = `Relatório de Frequência e Aproveitamento - BRASAS - ${origemBolsa}`;
+    const htmlBody = _buildEmailHtml(origemBolsa, mes, ano, obsExtra, logoSrc);
+
+    GmailApp.sendEmail(to, subject, '', {
+      htmlBody,
+      cc:          ccFinal || undefined,
+      attachments: [DriveApp.getFileById(fileId).getAs('application/pdf')],
+      name:        'Administrativo BRASAS',
+      replyTo:     'administrativo@brasas.com',
+      inlineImages: Object.keys(inlineImages).length ? inlineImages : undefined,
+    });
+
+    return JSON.stringify({ ok: true, to });
+  } catch(e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
+}
+
+function _buildEmailHtml(origemBolsa, mes, ano, obsExtra, logoSrc) {
+  const logoHtml = logoSrc
+    ? `<img src="${logoSrc}" alt="BRASAS" style="height:48px;display:block;margin-bottom:12px">`
+    : `<div style="font-size:20px;font-weight:700;color:#fff;letter-spacing:.5px;margin-bottom:12px">BRASAS</div>`;
+
+  const obsHtml = obsExtra
+    ? `<p style="margin:18px 0 0;font-size:14px;color:#334155;line-height:1.65">${obsExtra}</p>`
     : '';
-
-  const th = txt => `<th style="padding:9px 8px;text-align:center;font-weight:600;white-space:nowrap">${txt}</th>`;
 
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"></head>
-<body style="font-family:Arial,Helvetica,sans-serif;margin:0;padding:24px 16px;background:#f1f5f9">
-  <div style="max-width:1020px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,.09)">
+<body style="font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;background:#fff">
+  <div style="max-width:600px;margin:0 auto;padding:32px 16px">
 
-    <div style="background:#1d3557;padding:24px 32px">
-      <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:5px">Relatório de Frequência e Aproveitamento</div>
-      <div style="font-size:13px;color:rgba(255,255,255,.65)">BRASAS English Course &nbsp;·&nbsp; ${mes} / ${ano}</div>
+    <div style="background:#1d3557;padding:28px 32px;border-radius:10px 10px 0 0">
+      ${logoHtml}
+      <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px">Relatório de Frequência e Aproveitamento</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.65)">BRASAS English Course &nbsp;·&nbsp; ${mes} - ${ano}</div>
     </div>
 
-    <div style="padding:28px 32px 24px">
+    <div style="padding:28px 32px 32px;background:#fff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 10px 10px">
       <p style="margin:0 0 14px;font-size:14px;color:#334155">Olá!</p>
       <p style="margin:0;font-size:14px;color:#334155;line-height:1.65">
         Segue em anexo o <strong>Relatório de Frequência e Aproveitamento</strong> dos alunos bolsistas de
-        <strong>${origemBolsa}</strong>, referente ao mês de <strong>${mes} / ${ano}</strong>.
+        <strong>${origemBolsa}</strong>, referente ao mês de <strong>${mes} - ${ano}</strong>.
       </p>
-      ${obsBlock}
-    </div>
-
-    <div style="border-top:1px solid #e2e8f0;overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead>
-          <tr style="background:#1d3557;color:#fff">
-            <th style="padding:9px 12px;text-align:left;min-width:180px;font-weight:600">Unidade — Nome</th>
-            ${th('% Bolsa')}${th('Módulo')}${th('Freq. / Horário')}
-            ${th('Aulas Prev.')}${th('Aulas Assist.')}${th('Faltas/Mês')}
-            ${th('T1')}${th('T2')}
-            ${th('MT')}${th('WT')}${th('OC')}${th('OT')}
-            ${th('Média Final')}${th('Conceito')}
-            <th style="padding:9px 12px;text-align:left;font-weight:600">Observações</th>
-          </tr>
-        </thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-    </div>
-
-    <div style="padding:16px 32px;font-size:11px;color:#94a3b8;border-top:1px solid #f1f5f9;text-align:right">
-      BRASAS English Course &nbsp;·&nbsp; Gerado automaticamente
+      ${obsHtml}
     </div>
 
   </div>

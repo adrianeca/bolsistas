@@ -482,6 +482,7 @@ td.editable.saving{opacity:.6;pointer-events:none}
   <nav class="tab-bar">
     <button class="tab-btn active" data-tab="alunos" onclick="switchTab('alunos')">Alunos</button>
     <button class="tab-btn" data-tab="relatorios" onclick="switchTab('relatorios')">Relatórios</button>
+    <button class="tab-btn" data-tab="historico" onclick="switchTab('historico')" style="display:none">Histórico</button>
   </nav>
 
   <div class="app-body">
@@ -512,7 +513,7 @@ td.editable.saving{opacity:.6;pointer-events:none}
       </div>
       <div class="filter-group">
         <label class="filter-label">Origem da Bolsa</label>
-        <div class="multi-select" id="msOrigem" data-placeholder="Todas">
+        <div class="multi-select" id="msOrigem" data-placeholder="Todas" style="min-width:220px">
           <div class="ms-trigger" onclick="toggleMS('msOrigem')"><span class="ms-label">Todas</span><span class="ms-arrow">▾</span></div>
           <div class="ms-panel"></div>
         </div>
@@ -552,6 +553,7 @@ td.editable.saving{opacity:.6;pointer-events:none}
       <div class="table-header">
         <span class="table-header-title">Alunos Bolsistas</span>
         <span class="table-header-count" id="tableCount"></span>
+        <button id="reloadBtn" onclick="reloadData()" title="Recarregar dados" style="margin-left:auto;background:transparent;border:1px solid var(--gray-200);border-radius:6px;padding:4px 10px;font-size:.78rem;color:var(--gray-500);cursor:pointer">↺ Atualizar</button>
       </div>
       <div class="table-scroll">
         <table id="dataTable">
@@ -607,15 +609,6 @@ td.editable.saving{opacity:.6;pointer-events:none}
 
   <!-- Relatórios view -->
   <div id="viewRelatorios" style="display:none">
-    <div class="admin-bar" id="adminBar" style="margin-bottom:20px">
-      <div class="admin-bar-title">Ações administrativas</div>
-      <div class="admin-actions">
-        <button class="adm-btn cycle" id="btnCiclo" onclick="openCicloConfirm()">
-          ↺ Executar Ciclo Mensal
-        </button>
-      </div>
-      <div class="adm-log" id="adminLog"></div>
-    </div>
     <div class="filters-bar" style="margin-bottom:20px">
       <div class="filter-group">
         <label class="filter-label">Ano</label>
@@ -623,7 +616,10 @@ td.editable.saving{opacity:.6;pointer-events:none}
       </div>
       <div class="filter-group">
         <label class="filter-label">Mês</label>
-        <select class="filter-select" id="rMes" onchange="buildRelatorios()" style="min-width:130px"></select>
+        <div class="multi-select" id="msRelMes" data-placeholder="Todos">
+          <div class="ms-trigger" onclick="toggleMS('msRelMes')"><span class="ms-label">Todos</span><span class="ms-arrow">▾</span></div>
+          <div class="ms-panel"></div>
+        </div>
       </div>
       <div class="filter-group">
         <label class="filter-label">Unidade</label>
@@ -634,7 +630,7 @@ td.editable.saving{opacity:.6;pointer-events:none}
       </div>
       <div class="filter-group">
         <label class="filter-label">Origem da Bolsa</label>
-        <div class="multi-select" id="msRelOrigem" data-placeholder="Todas">
+        <div class="multi-select" id="msRelOrigem" data-placeholder="Todas" style="min-width:220px">
           <div class="ms-trigger" onclick="toggleMS('msRelOrigem')"><span class="ms-label">Todas</span><span class="ms-arrow">▾</span></div>
           <div class="ms-panel"></div>
         </div>
@@ -643,16 +639,23 @@ td.editable.saving{opacity:.6;pointer-events:none}
         <label class="filter-label">Aluno</label>
         <input type="text" class="filter-select" id="rAluno" placeholder="Buscar nome…" oninput="buildRelatorios()" style="min-width:160px">
       </div>
+      <button class="filter-clear" onclick="clearRelFilters()">Limpar</button>
     </div>
-    <div id="mergeBar" style="display:none;background:var(--navy-700);color:#fff;padding:10px 18px;border-radius:8px;margin-bottom:10px;display:none;align-items:center;gap:12px">
+    <div id="mergeBar" style="display:none;background:var(--navy-700);color:#fff;padding:10px 18px;border-radius:8px;margin-bottom:10px;align-items:center;gap:12px">
       <span id="mergeCount" style="font-weight:600;font-size:.88rem"></span>
       <button onclick="abrirSeletorAlunos(true)" style="padding:6px 14px;background:white;color:var(--navy-700);border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:.83rem">📄 Unir PDFs</button>
       <button onclick="limparMerge()" style="padding:6px 12px;background:transparent;color:#cbd5e1;border:1px solid #475569;border-radius:6px;cursor:pointer;font-size:.83rem">Cancelar</button>
     </div>
+    <div id="mergeResult" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;padding:10px 18px;border-radius:8px;margin-bottom:10px;align-items:center;gap:12px;font-size:.85rem">
+      <span>✅ PDF mesclado gerado:</span>
+      <a id="mergeResultLink" href="#" target="_blank" style="color:#15803d;font-weight:600;text-decoration:none">📂 Abrir no Drive</a>
+      <button onclick="document.getElementById('mergeResult').style.display='none'" style="margin-left:auto;background:transparent;border:none;color:#16a34a;cursor:pointer;font-size:.85rem;padding:0">✕</button>
+    </div>
     <div class="table-wrap">
       <div class="table-header">
         <span class="table-header-title">Relatórios por Parceiro</span>
-        <span class="table-header-count" id="relCount"></span>
+        <span class="table-header-count" id="relCount" style="margin-left:10px"></span>
+        <a id="driveFolderLink" href="#" target="_blank" style="display:none;margin-left:auto;font-size:.78rem;font-weight:600;color:var(--navy-500);text-decoration:none;align-items:center;gap:5px;padding:5px 12px;border:1px solid var(--navy-200);border-radius:6px;background:var(--gray-50)">📁 Pasta no Drive</a>
       </div>
       <div class="table-scroll" style="max-height:calc(100vh - 220px)">
         <table style="width:100%;border-collapse:collapse;font-size:.8rem">
@@ -669,6 +672,79 @@ td.editable.saving{opacity:.6;pointer-events:none}
           </thead>
           <tbody id="relBody">
             <tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📋</div><p>Selecione o período para ver os relatórios.</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- PDFs Gerados -->
+    <div style="margin-top:20px">
+      <div class="table-wrap">
+        <div class="table-header">
+          <span class="table-header-title">PDFs Gerados</span>
+          <input type="text" id="pdfsBusca" placeholder="Buscar PDF…" oninput="filterPDFsGerados()" style="margin-left:12px;max-width:230px;border:1px solid var(--gray-200);border-radius:6px;padding:4px 10px;font-size:.78rem;color:var(--gray-700);outline:none" onfocus="this.style.borderColor='var(--navy-400)'" onblur="this.style.borderColor='var(--gray-200)'">
+          <span class="table-header-count" id="pdfsGeradosCount" style="margin-left:8px"></span>
+          <button onclick="loadPDFsGerados()" title="Recarregar" style="margin-left:auto;background:transparent;border:1px solid var(--gray-200);border-radius:6px;padding:4px 10px;font-size:.78rem;color:var(--gray-500);cursor:pointer">↺ Atualizar</button>
+        </div>
+        <div id="pdfsGeradosList">
+          <div style="padding:20px 16px;text-align:center;color:var(--gray-400);font-size:.82rem">Carregando…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Enviar E-mail (PDF Mesclado) -->
+  <div class="modal-overlay" id="mergeEmailModal">
+    <div class="modal-card" style="max-width:500px">
+      <div class="modal-title">Enviar PDF por E-mail</div>
+      <div id="meTitle" style="font-size:.82rem;color:var(--gray-500);margin-bottom:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div>
+          <label style="font-size:.78rem;color:var(--gray-600);font-weight:500;display:block;margin-bottom:4px">Para <span style="color:var(--danger-500)">*</span></label>
+          <input id="meTo" type="text" placeholder="dest1@email.com, dest2@email.com" style="width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;font-size:.83rem;outline:none" onfocus="this.style.borderColor='var(--navy-400)'" onblur="this.style.borderColor='var(--gray-200)'">
+        </div>
+        <div>
+          <label style="font-size:.78rem;color:var(--gray-600);font-weight:500;display:block;margin-bottom:4px">CC</label>
+          <input id="meCc" type="text" placeholder="cc@email.com, cc2@email.com" style="width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;font-size:.83rem;outline:none" onfocus="this.style.borderColor='var(--navy-400)'" onblur="this.style.borderColor='var(--gray-200)'">
+        </div>
+        <div>
+          <label style="font-size:.78rem;color:var(--gray-600);font-weight:500;display:block;margin-bottom:4px">Observações</label>
+          <textarea id="meObs" rows="3" placeholder="Mensagem opcional…" style="width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;font-size:.83rem;outline:none;resize:vertical;font-family:inherit" onfocus="this.style.borderColor='var(--navy-400)'" onblur="this.style.borderColor='var(--gray-200)'"></textarea>
+        </div>
+      </div>
+      <div class="modal-error-box" id="meError"></div>
+      <div class="modal-actions" style="margin-top:16px">
+        <button class="modal-cancel" onclick="closeModal('mergeEmailModal')">Cancelar</button>
+        <button class="modal-primary" id="meSendBtn" onclick="confirmarEnvioMesclado()">Enviar E-mail</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Histórico view -->
+  <div id="viewHistorico" style="display:none">
+    <div class="table-header" style="margin-bottom:20px">
+      <span class="table-header-title">Histórico de Edições</span>
+      <span class="table-header-count" id="histCount"></span>
+    </div>
+    <!-- Log detalhado -->
+    <div class="table-wrap">
+      <div class="table-header">
+        <span class="table-header-title" style="font-size:.82rem;font-weight:600;color:var(--gray-500)">Detalhamento</span>
+      </div>
+      <div class="table-scroll" style="max-height:calc(100vh - 340px)">
+        <table style="width:100%;border-collapse:collapse;font-size:.8rem">
+          <thead>
+            <tr>
+              <th style="padding:8px 12px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200);white-space:nowrap">Data/Hora</th>
+              <th style="padding:8px 12px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200)">Usuário</th>
+              <th style="padding:8px 12px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200)">Aluno</th>
+              <th style="padding:8px 12px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200)">Campo</th>
+              <th style="padding:8px 12px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200)">Anterior</th>
+              <th style="padding:8px 12px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200)">Novo</th>
+            </tr>
+          </thead>
+          <tbody id="histBody">
+            <tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📋</div><p>Carregando…</p></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -700,27 +776,6 @@ td.editable.saving{opacity:.6;pointer-events:none}
   <div>
     <div class="dep-alert-title">Campo restrito</div>
     <div class="dep-alert-body">Este campo só pode ser editado para bolsistas com origem <strong>Dependente BRASAS</strong>.</div>
-  </div>
-</div>
-
-<!-- Modal: Confirmar Ciclo -->
-<div class="modal-overlay" id="cicloModal">
-  <div class="modal-card">
-    <div class="modal-title">Executar Ciclo Mensal</div>
-    <div class="modal-info">
-      Este ciclo executará as seguintes etapas em sequência:
-      <ol style="margin-top:8px;padding-left:18px;line-height:2">
-        <li>Backup do mês atual → <code>db_bolsistas_mes_anterior</code></li>
-        <li>Calcular dias úteis na <code>bolsistas_consolidado</code></li>
-        <li>Copiar linhas (AA="Sim") para <code>Bolsistas App</code></li>
-        <li>Formatar coluna de horários</li>
-      </ol>
-    </div>
-    <div class="modal-error-box" id="cicloError"></div>
-    <div class="modal-actions">
-      <button class="modal-cancel" onclick="closeModal('cicloModal')">Cancelar</button>
-      <button class="modal-danger" id="cicloConfirmBtn" onclick="executarCiclo()">Executar agora</button>
-    </div>
   </div>
 </div>
 
@@ -770,7 +825,17 @@ td.editable.saving{opacity:.6;pointer-events:none}
     <div class="modal-title">Enviar Relatório por E-mail</div>
     <div class="modal-sub" id="emailChaveLabel" style="margin-bottom:12px"></div>
     <div id="emailPDFSection" style="margin-bottom:14px"></div>
-    <div class="email-recipients" id="emailInfo">Carregando informações…</div>
+    <div id="emailInfo" style="font-size:.8rem;color:var(--gray-500);margin-bottom:4px">Carregando informações…</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;margin-top:10px">
+      <div>
+        <label style="font-size:.78rem;color:var(--gray-600);font-weight:500;display:block;margin-bottom:3px">Para <span style="color:var(--danger-500)">*</span></label>
+        <input id="emailTo" type="text" placeholder="dest1@email.com, dest2@email.com" style="width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:6px 10px;font-size:.82rem;outline:none" onfocus="this.style.borderColor='var(--navy-400)'" onblur="this.style.borderColor='var(--gray-200)'">
+      </div>
+      <div>
+        <label style="font-size:.78rem;color:var(--gray-600);font-weight:500;display:block;margin-bottom:3px">CC</label>
+        <input id="emailCc" type="text" placeholder="cc@email.com, cc2@email.com" style="width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:6px 10px;font-size:.82rem;outline:none" onfocus="this.style.borderColor='var(--navy-400)'" onblur="this.style.borderColor='var(--gray-200)'">
+      </div>
+    </div>
     <div class="modal-field">
       <label class="modal-label">Observações gerais (opcional)</label>
       <textarea class="modal-textarea" id="emailObs" placeholder="Texto adicional que aparecerá no e-mail e no PDF…"></textarea>
@@ -797,7 +862,6 @@ let SORT_FIELD = '';
 let SORT_DIR = 1;
 let FULL_ROWS = [];
 let FERIADOS  = new Set();
-let _editedRows = new Set();
 let _currentEmailPDFList = [];
 const MES_ORDER = {janeiro:1,fevereiro:2,'março':3,marco:3,abril:4,maio:5,junho:6,julho:7,agosto:8,setembro:9,outubro:10,novembro:11,dezembro:12};
 const normMesKey = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/^\d+\s*/,'');
@@ -820,11 +884,8 @@ function onSessionValidated(jsonStr) {
   USER = res;
   document.getElementById('userChipName').textContent = USER.nome;
   document.getElementById('userChipRole').textContent = USER.role;
-  try { const s = localStorage.getItem('bolsistas_edited_' + TOKEN); if (s) _editedRows = new Set(JSON.parse(s).map(Number)); } catch(e) {}
 
-  if (USER.isAdmin) {
-    document.getElementById('adminBar').classList.add('visible');
-  }
+
   if (!USER.isAdmin) {
     document.getElementById('fUnidadeWrap').style.display = 'none';
   }
@@ -832,6 +893,7 @@ function onSessionValidated(jsonStr) {
   // Visibilidade das tabs por permissão
   document.querySelector('[data-tab="alunos"]').style.display     = USER.canViewAlunos     ? '' : 'none';
   document.querySelector('[data-tab="relatorios"]').style.display = USER.canViewRelatorios ? '' : 'none';
+  if (USER.isAdmin || USER.canViewHistorico) document.querySelector('[data-tab="historico"]').style.display = '';
   switchTab(USER.canViewAlunos ? 'alunos' : 'relatorios');
 
   // Mostra o app imediatamente com spinner interno na tabela
@@ -874,6 +936,25 @@ function onAppData(jsonStr) {
   ALL_ROWS     = res.rows;
 
   renderTable(ALL_ROWS);
+}
+
+function reloadData() {
+  const btn = document.getElementById('reloadBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '↺'; btn.style.opacity = '.5'; }
+  document.getElementById('tableBody').innerHTML =
+    '<tr><td colspan="31"><div class="empty-state"><div class="spinner" style="width:28px;height:28px;border-width:2px;margin:0 auto 10px"></div>' +
+    '<p style="color:var(--gray-400)">Atualizando dados…</p></div></td></tr>';
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (btn) { btn.disabled = false; btn.textContent = '↺ Atualizar'; btn.style.opacity = '1'; }
+      onAppData(res);
+    })
+    .withFailureHandler(function(err) {
+      if (btn) { btn.disabled = false; btn.textContent = '↺ Atualizar'; btn.style.opacity = '1'; }
+      document.getElementById('tableBody').innerHTML =
+        '<tr><td colspan="31"><div class="empty-state"><p style="color:var(--danger-600)">Erro ao atualizar: ' + (err.message || err) + '</p></div></td></tr>';
+    })
+    .reloadApp(TOKEN);
 }
 
 function showError(msg) {
@@ -948,8 +1029,8 @@ function applyFilters() {
     if (!inArr(r.origemBolsa, origemBolsa)) return false;
     if (busca && !norm(r.nome).includes(buscaN) && !norm(r.turma).includes(buscaN)) return false;
     if (pctMin > 0 && !(r._pctFaltadosLivro !== '' && Number(r._pctFaltadosLivro) > pctMin)) return false;
-    if (editFilter === 'sim' && !_editedRows.has(r.rowIndex)) return false;
-    if (editFilter === 'nao' &&  _editedRows.has(r.rowIndex)) return false;
+    if (editFilter === 'sim' && !r.editadoWebapp) return false;
+    if (editFilter === 'nao' &&  !!r.editadoWebapp) return false;
     return true;
   });
 
@@ -966,6 +1047,15 @@ function clearFilters() {
   document.getElementById('fEditado').value   = '';
   ALL_ROWS    = FULL_ROWS;
   renderTable(ALL_ROWS);
+}
+
+function clearRelFilters() {
+  ['msRelMes','msRelUnidade','msRelOrigem'].forEach(function(id) {
+    document.querySelectorAll('#' + id + ' .ms-panel input').forEach(function(cb) { cb.checked = false; });
+    updateMSLabel(id);
+  });
+  document.getElementById('rAluno').value = '';
+  buildRelatorios();
 }
 
 // ─── Tabela ──────────────────────────────────────────────────
@@ -1193,11 +1283,10 @@ function detailSave(rowIndex, field, newVal, oldVal) {
       const d = JSON.parse(res);
       if (!d.ok) { toast('Erro ao salvar: ' + d.error, false); return; }
       if (r) {
-        r[field]         = newVal;
-        r._nota          = calcNota(r);
-        r._aprovAjustado = calcAprovAjustado(r);
-        _editedRows.add(Number(rowIndex));
-        try { localStorage.setItem('bolsistas_edited_' + TOKEN, JSON.stringify([..._editedRows])); } catch(e) {}
+        r[field]          = newVal;
+        r.editadoWebapp = true;
+        r._nota           = calcNota(r);
+        r._aprovAjustado  = calcAprovAjustado(r);
         _renderCurrentPage();
         _renderDetail(r);
       }
@@ -1247,7 +1336,7 @@ function _renderCurrentPage() {
     const faltSt      = faltados > 0 ? 'color:var(--danger-600);font-weight:600' : '';
     const pctFalt     = r._pctFaltadosLivro !== '' && r._pctFaltadosLivro !== undefined ? r._pctFaltadosLivro : '';
     const pctFaltSt   = pctFalt > 10 ? 'color:var(--danger-600);font-weight:600' : '';
-    return groupHtml + `<tr data-row="${r.rowIndex}"${_editedRows.has(r.rowIndex) ? ' class="edited-row"' : ""}>
+    return groupHtml + `<tr data-row="${r.rowIndex}"${r.editadoWebapp ? ' class="edited-row"' : ""}>
       ${eNomeCell(r)}
       ${eCell(r,'unidade',false)}
       ${eCell(r,'statusAluno',canEdit)}
@@ -1307,12 +1396,17 @@ function changePage(delta) {
 }
 
 function sortBy(field) {
-  if (SORT_FIELD === field) {
-    SORT_DIR *= -1;
-  } else {
-    SORT_FIELD = field;
-    SORT_DIR = 1;
-  }
+  if (SORT_FIELD !== field) { SORT_FIELD = field; SORT_DIR = 1; }
+  else if (SORT_DIR === 1)  { SORT_DIR = -1; }
+  else                      { SORT_FIELD = null; SORT_DIR = 1; }
+
+  document.querySelectorAll('thead th[data-sort]').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+    if (th.dataset.sort === SORT_FIELD) th.classList.add(SORT_DIR === 1 ? 'sort-asc' : 'sort-desc');
+  });
+
+  if (!SORT_FIELD) { applyFilters(); return; }
+
   ALL_ROWS.sort((a, b) => {
     const va = a[field] ?? '';
     const vb = b[field] ?? '';
@@ -1322,10 +1416,6 @@ function sortBy(field) {
   });
   PAGE = 1;
   _renderCurrentPage();
-  document.querySelectorAll('thead th[data-sort]').forEach(th => {
-    th.classList.remove('sort-asc', 'sort-desc');
-    if (th.dataset.sort === SORT_FIELD) th.classList.add(SORT_DIR === 1 ? 'sort-asc' : 'sort-desc');
-  });
 }
 
 // ─── Cell helpers ────────────────────────────────────────────
@@ -1482,14 +1572,13 @@ function saveField(td, rowIndex, field, newVal, oldVal) {
       }
       const r = ALL_ROWS.find(x => x.rowIndex == rowIndex);
       if (r) {
-        r[field] = newVal;
-        r._nota          = calcNota(r);
-        r._aprovAjustado = calcAprovAjustado(r);
+        r[field]          = newVal;
+        r.editadoWebapp = true;
+        r._nota           = calcNota(r);
+        r._aprovAjustado  = calcAprovAjustado(r);
       }
       td.dataset.val = newVal;
       restoreCell(td, field, newVal, r);
-      _editedRows.add(Number(rowIndex));
-      try { localStorage.setItem('bolsistas_edited_' + TOKEN, JSON.stringify([..._editedRows])); } catch(e) {}
       const tr = td.closest('tr');
       if (tr) tr.classList.add('edited-row');
       toast('Salvo!', true);
@@ -1515,46 +1604,6 @@ function renderStats(rows) {
     <div class="stat-chip"><strong>${origens}</strong> origens de bolsa</div>`;
 }
 
-// ─── Ciclo Mensal ────────────────────────────────────────────
-function openCicloConfirm() {
-  document.getElementById('cicloError').style.display = 'none';
-  document.getElementById('cicloError').textContent = '';
-  document.getElementById('cicloConfirmBtn').disabled = false;
-  openModal('cicloModal');
-}
-
-function executarCiclo() {
-  const btn = document.getElementById('cicloConfirmBtn');
-  btn.disabled = true;
-  btn.textContent = 'Executando…';
-  document.getElementById('cicloError').style.display = 'none';
-
-  google.script.run
-    .withSuccessHandler(res => {
-      const d = JSON.parse(res);
-      btn.textContent = 'Executar agora';
-      if (!d.ok) {
-        const errEl = document.getElementById('cicloError');
-        errEl.textContent = d.error;
-        errEl.style.display = 'block';
-        btn.disabled = false;
-        return;
-      }
-      closeModal('cicloModal');
-      const log = document.getElementById('adminLog');
-      log.innerHTML = d.log.map(l => `<div class="log-ok">✓ ${esc(l)}</div>`).join('');
-      log.classList.add('visible');
-      toast('Ciclo mensal executado com sucesso!', true);
-    })
-    .withFailureHandler(err => {
-      const errEl = document.getElementById('cicloError');
-      errEl.textContent = err.message || err;
-      errEl.style.display = 'block';
-      btn.disabled = false;
-      btn.textContent = 'Executar agora';
-    })
-    .runCicloMensal(TOKEN);
-}
 
 // ─── PDF / Email modal ───────────────────────────────────────
 function populateSelect(id, values, placeholder) {
@@ -1665,7 +1714,9 @@ function openEmailModal(chavePDF, btn) {
   const parts = chavePDF.split(' - ');
   const label = parts.slice(2).join(' - ') || chavePDF;
   document.getElementById('emailChaveLabel').textContent = label;
-  document.getElementById('emailObs').value = '';
+  document.getElementById('emailObs').value  = '';
+  document.getElementById('emailTo').value   = '';
+  document.getElementById('emailCc').value   = '';
   document.getElementById('emailError').style.display = 'none';
   document.getElementById('emailSendBtn').disabled = true;
 
@@ -1721,19 +1772,18 @@ function openEmailModal(chavePDF, btn) {
         pdfSection.innerHTML = '<span style="color:var(--warning-500);font-size:.8rem">⚠ Nenhum PDF encontrado. Gere um PDF antes de enviar.</span>';
       }
 
-      // ── Info de destinatários ──
+      // ── Preenche campos de destinatários (editáveis) ──
       const p = d.parceiro;
       const fixedCC = ['adriane@brasas.com', 'administrativo@brasas.com'];
-      const allCC   = [...(p.cc || []), ...fixedCC].filter(Boolean);
-      let html = '<div><strong>' + d.totalAlunos + '</strong> aluno' + (d.totalAlunos !== 1 ? 's' : '') + ' neste relatório</div>';
-      html += '<div style="margin-top:6px"><strong>Para:</strong> <span class="recipient-tag">' + esc(p.to) + '</span></div>';
-      if (allCC.length) {
-        html += '<div style="margin-top:4px"><strong>CC:</strong> ' + allCC.map(e => '<span class="recipient-tag">' + esc(e) + '</span>').join(' ') + '</div>';
-      }
+      const allCC   = [...new Set([...(p.cc || []), ...fixedCC])].filter(Boolean);
+      document.getElementById('emailTo').value = p.to || '';
+      document.getElementById('emailCc').value = allCC.join(', ');
+
+      let infoHtml = '<strong>' + d.totalAlunos + '</strong> aluno' + (d.totalAlunos !== 1 ? 's' : '') + ' neste relatório';
       if (d.obsExtras && d.obsExtras.length) {
-        html += '<div style="margin-top:8px;font-size:.78rem;color:var(--gray-500)"><b>Obs. individuais:</b> ' + d.obsExtras.map(esc).join(' | ') + '</div>';
+        infoHtml += ' &nbsp;·&nbsp; <b>Obs.:</b> ' + d.obsExtras.map(esc).join(' | ');
       }
-      document.getElementById('emailInfo').innerHTML = html;
+      document.getElementById('emailInfo').innerHTML = infoHtml;
       document.getElementById('emailSendBtn').disabled = false;
     })
     .withFailureHandler(err => {
@@ -1752,11 +1802,14 @@ function verPDFSelecionado() {
 
 function confirmarEnvio() {
   const obs    = document.getElementById('emailObs').value.trim();
+  const to     = document.getElementById('emailTo').value.trim();
+  const cc     = document.getElementById('emailCc').value.trim();
   const sel    = document.getElementById('emailPdfSelect');
   const fileId = sel ? sel.value : ((_currentPDFFiles[_currentChavePDF] || {}).fileId || '');
   const btn    = document.getElementById('emailSendBtn');
   const errEl  = document.getElementById('emailError');
 
+  if (!to) { errEl.textContent = 'Informe o destinatário.'; errEl.style.display = 'block'; return; }
   btn.disabled = true; btn.textContent = 'Enviando…';
   errEl.style.display = 'none';
 
@@ -1772,7 +1825,7 @@ function confirmarEnvio() {
       btn.disabled = false; btn.textContent = 'Enviar E-mail';
       errEl.textContent = err.message || err; errEl.style.display = 'block';
     })
-    .enviarEmail(TOKEN, JSON.stringify({ chavePDF: _currentChavePDF, fileId, obsExtra: obs }));
+    .enviarEmail(TOKEN, JSON.stringify({ chavePDF: _currentChavePDF, fileId, obsExtra: obs, toOverride: to, ccOverride: cc }));
 }
 // ─── Helpers UI ──────────────────────────────────────────────
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
@@ -1809,8 +1862,10 @@ function esc(s) {
 function switchTab(tab) {
   document.getElementById('viewAlunos').style.display     = tab === 'alunos'     ? '' : 'none';
   document.getElementById('viewRelatorios').style.display = tab === 'relatorios' ? '' : 'none';
+  document.getElementById('viewHistorico').style.display  = tab === 'historico'  ? '' : 'none';
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   if (tab === 'relatorios') { initRelatorios(); _syncFiltersToRelatorio(); }
+  if (tab === 'historico')  { loadHistorico(); }
 }
 
 function _syncFiltersToRelatorio() {
@@ -1818,10 +1873,10 @@ function _syncFiltersToRelatorio() {
   const meses    = getMS('msMes');
   const unidades = getMS('msUnidade');
   const origens  = getMS('msOrigem');
-  if (anos.length === 1)     { const s = document.getElementById('rAno'); if (s) s.value = anos[0]; }
-  if (meses.length === 1)    { const s = document.getElementById('rMes'); if (s) s.value = meses[0]; }
-  if (unidades.length) _setMS('msRelUnidade', unidades);
-  if (origens.length)  _setMS('msRelOrigem',  origens);
+  if (anos.length === 1)  { const s = document.getElementById('rAno'); if (s) s.value = anos[0]; }
+  if (meses.length)       _setMS('msRelMes',      meses);
+  if (unidades.length)    _setMS('msRelUnidade',   unidades);
+  if (origens.length)     _setMS('msRelOrigem',    origens);
   buildRelatorios();
 }
 
@@ -1834,13 +1889,30 @@ function initRelatorios() {
   const selAno   = document.getElementById('rAno');
   if (selAno.options.length <= 1) {
     populateSelect('rAno', anos, 'Todos');
-    populateSelect('rMes', meses, 'Todos');
-    buildMS('msRelUnidade', unidades, 'buildRelatorios');
-    buildMS('msRelOrigem',  origens,  'buildRelatorios');
+    buildMS('msRelMes',      meses,    'buildRelatorios');
+    buildMS('msRelUnidade',  unidades, 'buildRelatorios');
+    buildMS('msRelOrigem',   origens,  'buildRelatorios');
     const curYear = String(new Date().getFullYear());
     if (anos.includes(curYear)) selAno.value = curYear;
+    _carregarLinkDrive();
   }
   buildRelatorios();
+  loadPDFsGerados();
+}
+
+let _driveFolderLoaded = false;
+function _carregarLinkDrive() {
+  if (_driveFolderLoaded) return;
+  _driveFolderLoaded = true;
+  google.script.run
+    .withSuccessHandler(res => {
+      const d = JSON.parse(res);
+      if (!d.ok) return;
+      const el = document.getElementById('driveFolderLink');
+      if (el) { el.href = d.url; el.style.display = 'flex'; }
+    })
+    .withFailureHandler(() => {})
+    .getRelatoriosFolderUrl(TOKEN);
 }
 
 function buildRelatorios() {
@@ -1848,7 +1920,7 @@ function buildRelatorios() {
   const mergeBar = document.getElementById('mergeBar');
   if (mergeBar) mergeBar.style.display = 'none';
   const ano      = document.getElementById('rAno').value;
-  const mes      = document.getElementById('rMes').value;
+  const meses    = getMS('msRelMes');
   const unidade  = getMS('msRelUnidade');
   const origem   = getMS('msRelOrigem');
   const norm     = s => String(s||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
@@ -1856,7 +1928,7 @@ function buildRelatorios() {
   const aluno    = norm(document.getElementById('rAluno').value);
   const filtered = FULL_ROWS.filter(r =>
     (!ano || String(r.ano) === ano) &&
-    (!mes || String(r.mes) === mes) &&
+    inArr(r.mes, meses) &&
     inArr(r.unidade, unidade) &&
     inArr(r.origemBolsa, origem) &&
     (!aluno || norm(r.nome).includes(aluno))
@@ -1961,15 +2033,33 @@ function abrirSeletorAlunos(chaves) {
   document.getElementById('alunosError').style.display    = 'none';
   document.getElementById('alunosGerarBtn').textContent   = _pdfMergeMode ? '📄 Unir em 1 PDF' : '📄 Gerar PDF';
 
-  const pdfNameRow = document.getElementById('pdfNameRow');
-  const pdfNameInput = document.getElementById('pdfNameInput');
-  if (!_pdfMergeMode && _pdfChaves.length === 1) {
+  const pdfNameRow         = document.getElementById('pdfNameRow');
+  const pdfNameInput       = document.getElementById('pdfNameInput');
+  const singleOrigemRow    = document.getElementById('singlePdfOrigemRow');
+  const mergePdfNamesSection = document.getElementById('mergePdfNamesSection');
+  pdfNameRow.style.display = '';
+  const pdfFolderRow = document.getElementById('pdfFolderRow');
+  if (_pdfMergeMode) {
+    const distinctOrigens = [];
+    _pdfChaves.forEach(chave => {
+      const ori = (base.find(r => r.chavePDF === chave) || {}).origemBolsa || chave.split(' - ').slice(2).join(' - ');
+      if (ori && !distinctOrigens.includes(ori)) distinctOrigens.push(ori);
+    });
+    pdfNameInput.value = 'Relatório Bolsistas — Mesclado';
+    document.getElementById('pdfOrigemInput').value = '';
+    document.getElementById('pdfFolderInput').value = distinctOrigens.join(' + ');
+    singleOrigemRow.style.display      = '';
+    pdfFolderRow.style.display         = '';
+    mergePdfNamesSection.style.display = 'none';
+    mergePdfNamesSection.innerHTML     = '';
+  } else {
     pdfNameInput.value = 'Relatório Bolsistas - ' + _pdfChaves[0];
     const defaultOrigem = (base.find(r => r.chavePDF === _pdfChaves[0]) || {}).origemBolsa || '';
     document.getElementById('pdfOrigemInput').value = defaultOrigem;
-    pdfNameRow.style.display = '';
-  } else {
-    pdfNameRow.style.display = 'none';
+    singleOrigemRow.style.display      = '';
+    pdfFolderRow.style.display         = 'none';
+    mergePdfNamesSection.style.display = 'none';
+    mergePdfNamesSection.innerHTML     = '';
   }
 
   const grouped = {};
@@ -2012,7 +2102,10 @@ function confirmarGerarPDF() {
     .filter(r => _pdfChaves.includes(r.chavePDF) && !selectedSet.has(r.rowIndex))
     .map(r => r.rowIndex);
   if (_pdfMergeMode) {
-    _execGerarMesclado(_pdfChaves, excluded);
+    const customTitle  = (document.getElementById('pdfNameInput').value || '').trim();
+    const customOrigem = (document.getElementById('pdfOrigemInput').value || '').trim();
+    const customFolder = (document.getElementById('pdfFolderInput').value || '').trim();
+    _execGerarMesclado(_pdfChaves, excluded, customTitle, customOrigem, customFolder);
   } else {
     const customTitle  = (document.getElementById('pdfNameInput').value || '').trim();
     const customOrigem = (document.getElementById('pdfOrigemInput').value || '').trim();
@@ -2036,6 +2129,7 @@ function _execGerarPDF(chavePDF, excluded, customTitle, customOrigem) {
       const viewEl = document.getElementById('rview-' + safeId);
       if (viewEl) { viewEl.href = d.viewUrl; viewEl.style.display = ''; }
       toast('PDF gerado com sucesso!', true);
+      loadPDFsGerados();
     })
     .withFailureHandler(err => {
       if (genBtn) { genBtn.disabled = false; genBtn.textContent = '📄 PDF'; }
@@ -2043,7 +2137,7 @@ function _execGerarPDF(chavePDF, excluded, customTitle, customOrigem) {
     })
     .gerarPDF(TOKEN, chavePDF, JSON.stringify(excluded), customTitle || '', customOrigem || '');
 }
-function _execGerarMesclado(chaves, excluded) {
+function _execGerarMesclado(chaves, excluded, customTitle, customOrigem, customFolder) {
   toast('Gerando PDF mesclado…', true);
   google.script.run
     .withSuccessHandler(res => {
@@ -2051,12 +2145,16 @@ function _execGerarMesclado(chaves, excluded) {
       if (!d.ok) { toast('Erro: ' + d.error, false); return; }
       const key = '__merge__' + chaves.join('|');
       _currentPDFFiles[key] = { fileId: d.fileId, viewUrl: d.viewUrl };
+      const resultDiv  = document.getElementById('mergeResult');
+      const resultLink = document.getElementById('mergeResultLink');
+      if (resultDiv && resultLink) { resultLink.href = d.viewUrl; resultDiv.style.display = 'flex'; }
       limparMerge();
-      toast('PDF mesclado gerado! Abrindo…', true);
+      toast('PDF mesclado gerado!', true);
+      loadPDFsGerados();
       window.open(d.viewUrl, '_blank');
     })
     .withFailureHandler(err => { toast('Erro: ' + (err.message||err), false); })
-    .gerarPDFMesclado(TOKEN, JSON.stringify(chaves), JSON.stringify(excluded));
+    .gerarPDFMesclado(TOKEN, JSON.stringify(chaves), JSON.stringify(excluded), customTitle || '', customOrigem || '', customFolder || '');
 }
 
 function openPreview(chavePDF) {
@@ -2172,6 +2270,207 @@ function openPreview(chavePDF) {
   document.getElementById('previewBody').innerHTML = html;
   openModal('previewModal');
 }
+
+/* ── Histórico de Edições ── */
+function loadHistorico() {
+  document.getElementById('histBody').innerHTML =
+    '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">⏳</div><p>Carregando…</p></div></td></tr>';
+  document.getElementById('histCount').textContent = '';
+  google.script.run
+    .withSuccessHandler(function(json) {
+      try {
+        var res = JSON.parse(json);
+        if (!res.ok) throw new Error(res.error || 'Erro');
+        renderHistorico(res.rows);
+      } catch(e) {
+        document.getElementById('histBody').innerHTML =
+          '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--danger-500);font-size:.82rem">' + e.message + '</td></tr>';
+      }
+    })
+    .withFailureHandler(function(e) {
+      document.getElementById('histBody').innerHTML =
+        '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--danger-500);font-size:.82rem">' + (e.message || 'Falha ao carregar') + '</td></tr>';
+    })
+    .getEditLog(TOKEN);
+}
+
+function renderHistorico(rows) {
+  document.getElementById('histCount').textContent = rows.length + (rows.length !== 1 ? ' edições' : ' edição');
+
+  /* ── Tabela de detalhe ── */
+  if (!rows.length) {
+    document.getElementById('histBody').innerHTML =
+      '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📋</div><p>Nenhuma edição registrada ainda.</p></div></td></tr>';
+    return;
+  }
+
+  var tbody = '';
+  rows.forEach(function(r, i) {
+    var ts = r.ts || '—';
+    var alunoInfo = '<span style="font-weight:600">' + (r.nome || '—') + '</span>' +
+      (r.unidade || r.mes ? '<br><span style="font-size:.7rem;color:var(--gray-400)">' + [r.unidade, r.mes && r.ano ? r.mes + ' ' + r.ano : r.mes || r.ano].filter(Boolean).join(' · ') + '</span>' : '');
+    var anterior = (r.anterior !== '' && r.anterior != null) ? r.anterior : '<span style="color:var(--gray-300);font-style:italic">vazio</span>';
+    var novo     = (r.novo     !== '' && r.novo     != null) ? '<strong>' + r.novo + '</strong>' : '<span style="color:var(--gray-300);font-style:italic">vazio</span>';
+    var bg = i % 2 === 0 ? '#fff' : 'var(--gray-50)';
+    tbody +=
+      '<tr style="background:' + bg + ';border-bottom:1px solid var(--gray-100)">' +
+        '<td style="padding:8px 12px;font-size:.75rem;color:var(--gray-500);white-space:nowrap">' + ts + '</td>' +
+        '<td style="padding:8px 12px;font-size:.75rem;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (r.email||'') + '">' + (r.email||'—') + '</td>' +
+        '<td style="padding:8px 12px;font-size:.78rem;line-height:1.4">' + alunoInfo + '</td>' +
+        '<td style="padding:8px 12px;font-size:.78rem;font-weight:600;color:var(--navy-600);white-space:nowrap">' + (r.campo||'—') + '</td>' +
+        '<td style="padding:8px 12px;font-size:.78rem;color:var(--gray-500)">' + anterior + '</td>' +
+        '<td style="padding:8px 12px;font-size:.78rem;color:var(--gray-700)">' + novo + '</td>' +
+      '</tr>';
+  });
+  document.getElementById('histBody').innerHTML = tbody;
+}
+
+/* ── PDFs Gerados ── */
+var _pdfsGeradosData = [];
+var _mergeEmailEntry = null;
+
+function loadPDFsGerados() {
+  var listEl  = document.getElementById('pdfsGeradosList');
+  var countEl = document.getElementById('pdfsGeradosCount');
+  if (!listEl) return;
+  listEl.innerHTML  = '<div style="padding:20px 16px;text-align:center;color:var(--gray-400);font-size:.82rem">Carregando…</div>';
+  countEl.textContent = '';
+  google.script.run
+    .withSuccessHandler(function(json) {
+      try {
+        var res = JSON.parse(json);
+        if (!res.ok) throw new Error(res.error || 'Erro');
+        renderPDFsGerados(res.rows);
+      } catch(e) {
+        listEl.innerHTML = '<div style="padding:12px 16px;color:var(--danger-500);font-size:.82rem">' + e.message + '</div>';
+      }
+    })
+    .withFailureHandler(function(e) {
+      listEl.innerHTML = '<div style="padding:12px 16px;color:var(--danger-500);font-size:.82rem">' + (e.message || 'Falha') + '</div>';
+    })
+    .getPDFsGerados(TOKEN);
+}
+
+function renderPDFsGerados(rows) {
+  _pdfsGeradosData = rows;
+  var busca = document.getElementById('pdfsBusca');
+  if (busca) busca.value = '';
+  filterPDFsGerados();
+}
+
+function filterPDFsGerados() {
+  var normStr = function(s) {
+    return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  };
+  var buscaEl = document.getElementById('pdfsBusca');
+  var q = normStr(buscaEl ? buscaEl.value : '').trim();
+
+  var listEl  = document.getElementById('pdfsGeradosList');
+  var countEl = document.getElementById('pdfsGeradosCount');
+  if (!listEl) return;
+
+  if (!_pdfsGeradosData.length) {
+    countEl.textContent = '';
+    listEl.innerHTML = '<div style="padding:24px 16px;text-align:center;color:var(--gray-400);font-size:.82rem">Nenhum PDF gerado ainda.</div>';
+    return;
+  }
+
+  var data = q
+    ? _pdfsGeradosData.filter(function(r) {
+        var haystack = normStr(r.titulo) + ' ' + normStr(r.origemBolsa) + ' ' + normStr(r.mes) + ' ' + normStr(r.ano);
+        return haystack.indexOf(q) !== -1;
+      })
+    : _pdfsGeradosData;
+
+  countEl.textContent = data.length + ' arquivo' + (data.length !== 1 ? 's' : '');
+
+  if (!data.length) {
+    listEl.innerHTML = '<div style="padding:24px 16px;text-align:center;color:var(--gray-400);font-size:.82rem">Nenhum resultado para "' + esc(buscaEl ? buscaEl.value : '') + '".</div>';
+    return;
+  }
+
+  var html = '';
+  data.forEach(function(r, i) {
+    var origIdx = _pdfsGeradosData.indexOf(r);
+    var bg = i % 2 === 0 ? '#fff' : 'var(--gray-50)';
+    var badge = r.tipo === 'mesclado'
+      ? '<span style="flex-shrink:0;font-size:.63rem;padding:2px 7px;border-radius:10px;background:var(--navy-100);color:var(--navy-700);font-weight:700;letter-spacing:.03em">UNIDO</span>'
+      : '<span style="flex-shrink:0;font-size:.63rem;padding:2px 7px;border-radius:10px;background:var(--gray-200);color:var(--gray-600);font-weight:700;letter-spacing:.03em">PDF</span>';
+    var periodo = [r.mes, r.ano].filter(Boolean).join(' ');
+    var emailBtn = '';
+    if (USER && USER.canSendEmail) {
+      if (r.tipo === 'individual' && r.chavePDF) {
+        emailBtn = '<button onclick="openEmailModalFromLog(' + origIdx + ',this)" style="flex-shrink:0;padding:4px 10px;font-size:.73rem;border:1px solid var(--navy-200);border-radius:4px;background:white;color:var(--navy-600);cursor:pointer;font-weight:600">📧 Enviar</button>';
+      } else {
+        emailBtn = '<button onclick="openMergeEmailModal(' + origIdx + ')" style="flex-shrink:0;padding:4px 10px;font-size:.73rem;border:1px solid var(--navy-200);border-radius:4px;background:white;color:var(--navy-600);cursor:pointer;font-weight:600">📧 Enviar</button>';
+      }
+    }
+    html +=
+      '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;background:' + bg + ';border-bottom:1px solid var(--gray-100);min-width:0">' +
+        badge +
+        '<span style="flex:1;font-size:.82rem;font-weight:600;color:var(--gray-700);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(r.titulo) + '">' + esc(r.titulo || r.origemBolsa) + '</span>' +
+        (periodo ? '<span style="flex-shrink:0;font-size:.77rem;color:var(--gray-400);white-space:nowrap">' + esc(periodo) + '</span>' : '') +
+        '<span style="flex-shrink:0;font-size:.7rem;color:var(--gray-300);white-space:nowrap">' + esc(r.ts) + '</span>' +
+        '<a href="' + esc(r.viewUrl) + '" target="_blank" style="flex-shrink:0;padding:4px 10px;font-size:.73rem;border:1px solid var(--gray-200);border-radius:4px;background:white;color:var(--gray-600);text-decoration:none;font-weight:600;white-space:nowrap">📂 Drive</a>' +
+        emailBtn +
+      '</div>';
+  });
+  listEl.innerHTML = html;
+}
+
+function openEmailModalFromLog(idx, btn) {
+  var entry = _pdfsGeradosData[idx];
+  if (!entry) return;
+  _currentPDFFiles[entry.chavePDF] = { fileId: entry.fileId, viewUrl: entry.viewUrl };
+  openEmailModal(entry.chavePDF, btn);
+}
+
+function openMergeEmailModal(idx) {
+  var entry = _pdfsGeradosData[idx];
+  if (!entry) return;
+  _mergeEmailEntry = entry;
+  document.getElementById('meTitle').textContent = entry.titulo || entry.origemBolsa;
+  document.getElementById('meTo').value   = '';
+  document.getElementById('meCc').value   = 'adriane@brasas.com';
+  document.getElementById('meObs').value  = '';
+  var errEl = document.getElementById('meError');
+  errEl.textContent = ''; errEl.style.display = 'none';
+  var btn = document.getElementById('meSendBtn');
+  btn.disabled = false; btn.textContent = 'Enviar E-mail';
+  openModal('mergeEmailModal');
+}
+
+function confirmarEnvioMesclado() {
+  var to    = document.getElementById('meTo').value.trim();
+  var cc    = document.getElementById('meCc').value.trim();
+  var obs   = document.getElementById('meObs').value.trim();
+  var errEl = document.getElementById('meError');
+  if (!to) { errEl.textContent = 'Informe o destinatário.'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+  var btn = document.getElementById('meSendBtn');
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  google.script.run
+    .withSuccessHandler(function(res) {
+      var d = JSON.parse(res);
+      btn.disabled = false; btn.textContent = 'Enviar E-mail';
+      if (!d.ok) { errEl.textContent = d.error; errEl.style.display = 'block'; return; }
+      closeModal('mergeEmailModal');
+      toast('E-mail enviado para ' + d.to + '!', true);
+    })
+    .withFailureHandler(function(e) {
+      btn.disabled = false; btn.textContent = 'Enviar E-mail';
+      errEl.textContent = e.message || 'Falha ao enviar.'; errEl.style.display = 'block';
+    })
+    .enviarEmailMesclado(TOKEN, JSON.stringify({
+      fileId:      _mergeEmailEntry.fileId,
+      to:          to,
+      cc:          cc,
+      origemBolsa: _mergeEmailEntry.origemBolsa,
+      mes:         _mergeEmailEntry.mes,
+      ano:         _mergeEmailEntry.ano,
+      obsExtra:    obs,
+    }));
+}
 </script>
 
 <!-- Modal: Seletor de Alunos para PDF -->
@@ -2188,8 +2487,15 @@ function openPreview(chavePDF) {
     <div id="pdfNameRow" style="display:none;margin-top:14px">
       <label style="font-size:.78rem;color:var(--gray-600);display:block;margin-bottom:4px;font-weight:500">Nome do arquivo PDF</label>
       <input id="pdfNameInput" type="text" style="width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;font-size:.83rem;color:var(--gray-700);outline:none" onfocus="this.style.borderColor='var(--navy-400)'" onblur="this.style.borderColor='var(--gray-200)'">
-      <label style="font-size:.78rem;color:var(--gray-600);display:block;margin-bottom:4px;font-weight:500;margin-top:10px">Nome da parceria no PDF</label>
-      <input id="pdfOrigemInput" type="text" style="width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;font-size:.83rem;color:var(--gray-700);outline:none" onfocus="this.style.borderColor='var(--navy-400)'" onblur="this.style.borderColor='var(--gray-200)'">
+      <div id="singlePdfOrigemRow">
+        <label style="font-size:.78rem;color:var(--gray-600);display:block;margin-bottom:4px;font-weight:500;margin-top:10px">Nome da parceria no PDF</label>
+        <input id="pdfOrigemInput" type="text" style="width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;font-size:.83rem;color:var(--gray-700);outline:none" onfocus="this.style.borderColor='var(--navy-400)'" onblur="this.style.borderColor='var(--gray-200)'">
+      </div>
+      <div id="pdfFolderRow" style="display:none">
+        <label style="font-size:.78rem;color:var(--gray-600);display:block;margin-bottom:4px;font-weight:500;margin-top:10px">Nome da pasta no Drive</label>
+        <input id="pdfFolderInput" type="text" style="width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;font-size:.83rem;color:var(--gray-700);outline:none" onfocus="this.style.borderColor='var(--navy-400)'" onblur="this.style.borderColor='var(--gray-200)'">
+      </div>
+      <div id="mergePdfNamesSection" style="display:none;margin-top:10px"></div>
     </div>
     <div class="modal-actions" style="margin-top:16px">
       <button class="modal-cancel" onclick="closeModal('alunosModal')">Cancelar</button>
