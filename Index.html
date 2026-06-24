@@ -155,6 +155,10 @@ tbody tr.row-even:hover td:first-child{background:var(--gray-50)}
 td.nome-cell{cursor:pointer}
 td.nome-cell:hover .nome{color:var(--navy-600);text-decoration:underline}
 
+/* Linha editada */
+tr.edited-row > td:first-child{box-shadow:inset 3px 0 0 var(--success-500)}
+tr.edited-row > td.nome-cell .nome::after{content:' ✓';color:var(--success-600);font-size:.7rem;font-weight:700}
+
 /* Detail panel */
 .detail-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;display:none;backdrop-filter:blur(2px)}
 .detail-overlay.open{display:block}
@@ -318,6 +322,21 @@ td.editable.saving{opacity:.6;pointer-events:none}
 .empty-state{text-align:center;padding:56px 32px;color:var(--gray-400)}
 .empty-state .empty-icon{font-size:2.5rem;margin-bottom:12px}
 .empty-state p{font-size:.85rem}
+
+/* Alerta campo dependente */
+#depAlert{
+  position:fixed;top:50%;left:50%;
+  transform:translate(-50%,-50%) scale(.88);opacity:0;
+  background:#fff;border:2px solid var(--warning-500);border-radius:14px;
+  padding:22px 26px;display:flex;align-items:flex-start;gap:14px;
+  max-width:380px;width:90%;
+  box-shadow:0 12px 40px rgba(0,0,0,.18);z-index:9200;
+  pointer-events:none;transition:opacity .15s,transform .15s;
+}
+#depAlert.show{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto}
+.dep-alert-icon{font-size:1.8rem;flex-shrink:0;margin-top:1px}
+.dep-alert-title{font-size:.92rem;font-weight:700;color:var(--gray-700);margin-bottom:5px}
+.dep-alert-body{font-size:.82rem;color:var(--gray-600);line-height:1.55}
 
 /* Toast */
 #toast{
@@ -512,6 +531,14 @@ td.editable.saving{opacity:.6;pointer-events:none}
           <option value="50">&gt;50%</option>
         </select>
       </div>
+      <div class="filter-group">
+        <label class="filter-label">Edição</label>
+        <select class="filter-select" id="fEditado" onchange="applyFilters()" style="min-width:130px">
+          <option value="">Todos</option>
+          <option value="sim">Editados ✓</option>
+          <option value="nao">Não editados</option>
+        </select>
+      </div>
       <button class="filter-btn" onclick="applyFilters()">Filtrar</button>
       <button class="filter-clear" onclick="clearFilters()">Limpar</button>
     </div>
@@ -542,10 +569,10 @@ td.editable.saving{opacity:.6;pointer-events:none}
               <th class="sortable editable-col" data-sort="dataInicioBook" onclick="sortBy(this.dataset.sort)">Início do Módulo</th>
               <th class="sortable editable-col" data-sort="frequencia" onclick="sortBy(this.dataset.sort)">Frequência</th>
               <th class="sortable editable-col" data-sort="horario" onclick="sortBy(this.dataset.sort)">Horário</th>
+              <th class="sortable editable-col" data-sort="diasAula" onclick="sortBy(this.dataset.sort)">Dias de Aula</th>
               <th class="sortable" data-sort="dataPrevConclusao" onclick="sortBy(this.dataset.sort)">Prev. Conclusão</th>
               <th class="sortable editable-col" data-sort="diasPrevistos" onclick="sortBy(this.dataset.sort)">Aulas Prev.</th>
               <th class="sortable editable-col" data-sort="diasAssistidos" onclick="sortBy(this.dataset.sort)">Aulas Assist.</th>
-              <th class="sortable editable-col" data-sort="diasAula" onclick="sortBy(this.dataset.sort)">Dias de Aula</th>
               <th class="sortable" data-sort="_faltadosMes" onclick="sortBy(this.dataset.sort)">Faltas/Mês</th>
               <th class="sortable" data-sort="_faltados" onclick="sortBy(this.dataset.sort)">Faltas/Módulo</th>
               <th class="sortable" data-sort="_pctFaltadosLivro" onclick="sortBy(this.dataset.sort)">% Faltas/Módulo</th>
@@ -667,6 +694,15 @@ td.editable.saving{opacity:.6;pointer-events:none}
 <!-- Toast -->
 <div id="toast"><span class="toast-icon"></span><span id="toastMsg"></span></div>
 
+<!-- Alerta: campo dependente restrito -->
+<div id="depAlert">
+  <div class="dep-alert-icon">🔒</div>
+  <div>
+    <div class="dep-alert-title">Campo restrito</div>
+    <div class="dep-alert-body">Este campo só pode ser editado para bolsistas com origem <strong>Dependente BRASAS</strong>.</div>
+  </div>
+</div>
+
 <!-- Modal: Confirmar Ciclo -->
 <div class="modal-overlay" id="cicloModal">
   <div class="modal-card">
@@ -699,7 +735,10 @@ td.editable.saving{opacity:.6;pointer-events:none}
       </div>
       <div class="filter-group">
         <label class="filter-label">Mês</label>
-        <select class="filter-select" id="pdfMes" onchange="loadChaves()" style="min-width:130px"></select>
+        <div class="multi-select" id="msPdfMes" data-placeholder="Selecione">
+          <div class="ms-trigger" onclick="toggleMS('msPdfMes')"><span class="ms-label">Selecione</span><span class="ms-arrow">▾</span></div>
+          <div class="ms-panel"></div>
+        </div>
       </div>
     </div>
     <div style="font-size:.75rem;color:var(--gray-400);margin-bottom:10px">
@@ -727,7 +766,7 @@ td.editable.saving{opacity:.6;pointer-events:none}
 
 <!-- Modal: Enviar E-mail -->
 <div class="modal-overlay" id="emailModal">
-  <div class="modal-card" style="max-width:520px">
+  <div class="modal-card" style="max-width:660px">
     <div class="modal-title">Enviar Relatório por E-mail</div>
     <div class="modal-sub" id="emailChaveLabel" style="margin-bottom:12px"></div>
     <div id="emailPDFSection" style="margin-bottom:14px"></div>
@@ -758,6 +797,8 @@ let SORT_FIELD = '';
 let SORT_DIR = 1;
 let FULL_ROWS = [];
 let FERIADOS  = new Set();
+let _editedRows = new Set();
+let _currentEmailPDFList = [];
 const MES_ORDER = {janeiro:1,fevereiro:2,'março':3,marco:3,abril:4,maio:5,junho:6,julho:7,agosto:8,setembro:9,outubro:10,novembro:11,dezembro:12};
 const normMesKey = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/^\d+\s*/,'');
 
@@ -779,6 +820,7 @@ function onSessionValidated(jsonStr) {
   USER = res;
   document.getElementById('userChipName').textContent = USER.nome;
   document.getElementById('userChipRole').textContent = USER.role;
+  try { const s = localStorage.getItem('bolsistas_edited_' + TOKEN); if (s) _editedRows = new Set(JSON.parse(s).map(Number)); } catch(e) {}
 
   if (USER.isAdmin) {
     document.getElementById('adminBar').classList.add('visible');
@@ -786,6 +828,11 @@ function onSessionValidated(jsonStr) {
   if (!USER.isAdmin) {
     document.getElementById('fUnidadeWrap').style.display = 'none';
   }
+
+  // Visibilidade das tabs por permissão
+  document.querySelector('[data-tab="alunos"]').style.display     = USER.canViewAlunos     ? '' : 'none';
+  document.querySelector('[data-tab="relatorios"]').style.display = USER.canViewRelatorios ? '' : 'none';
+  switchTab(USER.canViewAlunos ? 'alunos' : 'relatorios');
 
   // Mostra o app imediatamente com spinner interno na tabela
   document.getElementById('loadingScreen').style.display = 'none';
@@ -821,6 +868,8 @@ function onAppData(jsonStr) {
 
   FERIADOS     = new Set(res.feriados || []);
   FUNCIONARIOS = res.funcionarios || { unidades: [], porUnidade: {} };
+
+  if (res.isEditLocked && USER) USER.canEdit = false;
   FULL_ROWS    = res.rows;
   ALL_ROWS     = res.rows;
 
@@ -889,6 +938,7 @@ function applyFilters() {
   const origemBolsa = getMS('msOrigem');
   const busca       = document.getElementById('fBusca').value.trim();
   const pctMin      = parseInt(document.getElementById('fPctFaltas').value || '0') || 0;
+  const editFilter  = document.getElementById('fEditado').value;
   const buscaN      = norm(busca);
 
   ALL_ROWS = FULL_ROWS.filter(r => {
@@ -898,6 +948,8 @@ function applyFilters() {
     if (!inArr(r.origemBolsa, origemBolsa)) return false;
     if (busca && !norm(r.nome).includes(buscaN) && !norm(r.turma).includes(buscaN)) return false;
     if (pctMin > 0 && !(r._pctFaltadosLivro !== '' && Number(r._pctFaltadosLivro) > pctMin)) return false;
+    if (editFilter === 'sim' && !_editedRows.has(r.rowIndex)) return false;
+    if (editFilter === 'nao' &&  _editedRows.has(r.rowIndex)) return false;
     return true;
   });
 
@@ -911,6 +963,7 @@ function clearFilters() {
   });
   document.getElementById('fBusca').value    = '';
   document.getElementById('fPctFaltas').value = '';
+  document.getElementById('fEditado').value   = '';
   ALL_ROWS    = FULL_ROWS;
   renderTable(ALL_ROWS);
 }
@@ -1143,6 +1196,8 @@ function detailSave(rowIndex, field, newVal, oldVal) {
         r[field]         = newVal;
         r._nota          = calcNota(r);
         r._aprovAjustado = calcAprovAjustado(r);
+        _editedRows.add(Number(rowIndex));
+        try { localStorage.setItem('bolsistas_edited_' + TOKEN, JSON.stringify([..._editedRows])); } catch(e) {}
         _renderCurrentPage();
         _renderDetail(r);
       }
@@ -1187,11 +1242,12 @@ function _renderCurrentPage() {
     }
     const faltadosMes = r._faltadosMes !== '' && r._faltadosMes !== undefined ? r._faltadosMes : '';
     const faltMesSt   = faltadosMes > 0 ? 'color:var(--danger-600);font-weight:600' : '';
+    const isDep        = String(r.origemBolsa || '').toLowerCase().includes('dependente brasas');
     const faltados    = r._faltados !== '' && r._faltados !== undefined ? r._faltados : '';
     const faltSt      = faltados > 0 ? 'color:var(--danger-600);font-weight:600' : '';
     const pctFalt     = r._pctFaltadosLivro !== '' && r._pctFaltadosLivro !== undefined ? r._pctFaltadosLivro : '';
     const pctFaltSt   = pctFalt > 10 ? 'color:var(--danger-600);font-weight:600' : '';
-    return groupHtml + `<tr data-row="${r.rowIndex}">
+    return groupHtml + `<tr data-row="${r.rowIndex}"${_editedRows.has(r.rowIndex) ? ' class="edited-row"' : ""}>
       ${eNomeCell(r)}
       ${eCell(r,'unidade',false)}
       ${eCell(r,'statusAluno',canEdit)}
@@ -1204,10 +1260,10 @@ function _renderCurrentPage() {
       ${eCell(r,'dataInicioBook',canEdit,'font-size:.75rem')}
       ${eCell(r,'frequencia',canEdit,'text-align:center')}
       ${eCell(r,'horario',canEdit)}
+      ${eNumCell(r,'diasAula',canEdit)}
       ${eCell(r,'dataPrevConclusao',false,'font-size:.75rem')}
       ${eNumCell(r,'diasPrevistos',canEdit)}
       ${eNumCell(r,'diasAssistidos',canEdit)}
-      ${eNumCell(r,'diasAula',canEdit)}
       <td style="text-align:center;${faltMesSt}">${faltadosMes !== '' ? faltadosMes : ''}</td>
       <td style="text-align:center;${faltSt}">${faltados !== '' ? faltados : ''}</td>
       <td style="text-align:center;${pctFaltSt}">${pctFalt !== '' ? pctFalt + '%' : ''}</td>
@@ -1221,8 +1277,8 @@ function _renderCurrentPage() {
       <td style="text-align:center;font-size:.82rem">${r._nota !== "" ? r._nota : "<span style=\"color:var(--gray-300)\">—</span>"}</td>
       ${eAprovCell(r,canEdit)}
       ${eTextCell(r,'observacoes',canEdit)}
-      ${eCell(r,'dependenteUnidade',canEdit,'font-size:.75rem')}
-      ${eCell(r,'dependenteNome',canEdit,'font-size:.75rem')}
+      ${eDepCell(r,'dependenteUnidade',canEdit,isDep)}
+      ${eDepCell(r,'dependenteNome',canEdit,isDep)}
     </tr>`;
   }).join('');
 
@@ -1282,6 +1338,15 @@ function eCell(r, field, canEdit, style) {
   const st = style ? ` style="${style}"` : '';
   if (!canEdit) return `<td${st}>${esc(v)}</td>`;
   return `<td class="editable" data-field="${field}" data-row="${r.rowIndex}" data-val="${_ea(v)}"${st}>${esc(v)}</td>`;
+}
+
+function eDepCell(r, field, canEdit, isDep) {
+  if (canEdit && !isDep) {
+    const v = String(r[field] || '');
+    const inner = v ? esc(v) : '<span style="opacity:.35">🔒</span>';
+    return `<td style="font-size:.75rem;cursor:not-allowed;background:var(--warning-100);color:var(--gray-500)" title="Apenas para Dependente BRASAS" onclick="showDepAlert()">${inner}</td>`;
+  }
+  return eCell(r, field, canEdit && isDep, 'font-size:.75rem');
 }
 
 function eNomeCell(r) {
@@ -1423,6 +1488,10 @@ function saveField(td, rowIndex, field, newVal, oldVal) {
       }
       td.dataset.val = newVal;
       restoreCell(td, field, newVal, r);
+      _editedRows.add(Number(rowIndex));
+      try { localStorage.setItem('bolsistas_edited_' + TOKEN, JSON.stringify([..._editedRows])); } catch(e) {}
+      const tr = td.closest('tr');
+      if (tr) tr.classList.add('edited-row');
       toast('Salvo!', true);
     })
     .withFailureHandler(err => {
@@ -1507,7 +1576,7 @@ function openPDFModal() {
   const anos  = [...anosSet].sort().reverse();
   const meses = [...mesesSet].sort((a, b) => (MES_ORDER[a.toLowerCase()]||99) - (MES_ORDER[b.toLowerCase()]||99));
   populateSelect('pdfAno', anos, 'Selecione');
-  populateSelect('pdfMes', meses, 'Selecione');
+  buildMS('msPdfMes', meses, 'loadChaves');
   const curYear = String(new Date().getFullYear());
   if (anos.includes(curYear)) document.getElementById('pdfAno').value = curYear;
   document.getElementById('chavesList').innerHTML =
@@ -1516,13 +1585,13 @@ function openPDFModal() {
 }
 
 function loadChaves() {
-  const mes = document.getElementById('pdfMes').value;
-  const ano = document.getElementById('pdfAno').value;
-  if (!mes || !ano) return;
+  const meses = getMS('msPdfMes');
+  const ano   = document.getElementById('pdfAno').value;
+  if (!meses.length || !ano) return;
 
   const chaveMap = {};
   for (const r of FULL_ROWS) {
-    if (String(r.mes) !== mes || String(r.ano) !== ano) continue;
+    if (!meses.includes(String(r.mes)) || String(r.ano) !== ano) continue;
     const c = r.chavePDF;
     if (!c) continue;
     if (!chaveMap[c]) chaveMap[c] = { count: 0, obsExtras: [] };
@@ -1600,18 +1669,10 @@ function openEmailModal(chavePDF, btn) {
   document.getElementById('emailError').style.display = 'none';
   document.getElementById('emailSendBtn').disabled = true;
 
-  // PDF section: show immediately based on what is already generated
-  const pdfInfo = _currentPDFFiles[chavePDF];
   const pdfSection = document.getElementById('emailPDFSection');
-  if (pdfInfo) {
-    pdfSection.innerHTML =
-      '<a class="pdf-preview-link" href="' + pdfInfo.viewUrl + '" target="_blank">👁 Visualizar PDF antes de enviar</a>';
-  } else {
-    pdfSection.innerHTML =
-      '<span style="color:var(--warning-500);font-size:.8rem;display:block;padding:8px 0">⚠ PDF ainda não foi gerado. Gere antes de enviar para incluir o anexo.</span>';
-  }
-
+  pdfSection.innerHTML = '<span style="color:var(--gray-400);font-size:.8rem">Carregando PDFs disponíveis…</span>';
   document.getElementById('emailInfo').innerHTML = '<span style="color:var(--gray-400);font-size:.82rem">Carregando informações do parceiro…</span>';
+  document.getElementById('emailSendBtn').disabled = true;
   openModal('emailModal');
 
   google.script.run
@@ -1619,12 +1680,56 @@ function openEmailModal(chavePDF, btn) {
       const d = JSON.parse(res);
       if (!d.ok) {
         document.getElementById('emailInfo').innerHTML = '<span style="color:var(--danger-600)">' + esc(d.error) + '</span>';
+        pdfSection.innerHTML = '';
         return;
       }
-      const p   = d.parceiro;
-      const tos = [p.to, ...(p.cc || [])].filter(Boolean);
+
+      // ── Seletor de PDF ──
+      // Combina PDFs do Drive com PDFs gerados na sessão para o mesmo parceiro
+      const origemBolsa = (d.parceiro || {}).origemBolsa || '';
+      const sessionPDFs = [];
+      if (origemBolsa) {
+        Object.keys(_currentPDFFiles).forEach(chave => {
+          const row = FULL_ROWS.find(x => x.chavePDF === chave);
+          if (row && row.origemBolsa === origemBolsa) {
+            const pf = _currentPDFFiles[chave];
+            sessionPDFs.push({ name: chave, fileId: pf.fileId, viewUrl: pf.viewUrl });
+          }
+        });
+      }
+      const driveList = d.pdfList || [];
+      const driveIds  = new Set(driveList.map(p => p.fileId));
+      const merged    = [...driveList, ...sessionPDFs.filter(p => !driveIds.has(p.fileId))];
+      _currentEmailPDFList = merged;
+      const currentFileId  = (_currentPDFFiles[chavePDF] || {}).fileId || '';
+
+      if (_currentEmailPDFList.length) {
+        let selHtml = '<div style="margin-bottom:4px;font-size:.8rem;font-weight:600;color:var(--gray-600)">PDF a enviar:</div>';
+        selHtml += '<div style="display:flex;gap:8px;align-items:center">';
+        selHtml += '<select id="emailPdfSelect" style="flex:1;padding:7px 10px;border:1px solid var(--gray-200);border-radius:8px;font-size:.82rem;background:#fff">';
+        _currentEmailPDFList.forEach(p => {
+          const sel = p.fileId === currentFileId ? ' selected' : '';
+          selHtml += '<option value="' + esc(p.fileId) + '"' + sel + '>' + esc(p.name) + '</option>';
+        });
+        selHtml += '</select>';
+        selHtml += '<button onclick="verPDFSelecionado()" style="white-space:nowrap;padding:7px 12px;border:1px solid var(--gray-200);border-radius:8px;background:#fff;cursor:pointer;font-size:.82rem">👁 Ver</button>';
+        selHtml += '</div>';
+        pdfSection.innerHTML = selHtml;
+      } else if (currentFileId) {
+        pdfSection.innerHTML = '<a class="pdf-preview-link" href="' + (_currentPDFFiles[chavePDF].viewUrl||'#') + '" target="_blank">👁 Visualizar PDF antes de enviar</a>';
+      } else {
+        pdfSection.innerHTML = '<span style="color:var(--warning-500);font-size:.8rem">⚠ Nenhum PDF encontrado. Gere um PDF antes de enviar.</span>';
+      }
+
+      // ── Info de destinatários ──
+      const p = d.parceiro;
+      const fixedCC = ['adriane@brasas.com', 'administrativo@brasas.com'];
+      const allCC   = [...(p.cc || []), ...fixedCC].filter(Boolean);
       let html = '<div><strong>' + d.totalAlunos + '</strong> aluno' + (d.totalAlunos !== 1 ? 's' : '') + ' neste relatório</div>';
-      html += '<div style="margin-top:6px"><strong>Para:</strong> ' + tos.map(e => '<span class="recipient-tag">' + esc(e) + '</span>').join(' ') + '</div>';
+      html += '<div style="margin-top:6px"><strong>Para:</strong> <span class="recipient-tag">' + esc(p.to) + '</span></div>';
+      if (allCC.length) {
+        html += '<div style="margin-top:4px"><strong>CC:</strong> ' + allCC.map(e => '<span class="recipient-tag">' + esc(e) + '</span>').join(' ') + '</div>';
+      }
       if (d.obsExtras && d.obsExtras.length) {
         html += '<div style="margin-top:8px;font-size:.78rem;color:var(--gray-500)"><b>Obs. individuais:</b> ' + d.obsExtras.map(esc).join(' | ') + '</div>';
       }
@@ -1633,14 +1738,22 @@ function openEmailModal(chavePDF, btn) {
     })
     .withFailureHandler(err => {
       document.getElementById('emailInfo').innerHTML = '<span style="color:var(--danger-600)">Erro: ' + esc(err.message||err) + '</span>';
+      pdfSection.innerHTML = '';
     })
     .getEmailPreview(TOKEN, chavePDF);
 }
 
+function verPDFSelecionado() {
+  const sel = document.getElementById('emailPdfSelect');
+  if (!sel || !sel.value) return;
+  const item = _currentEmailPDFList.find(p => p.fileId === sel.value);
+  if (item) window.open(item.viewUrl, '_blank');
+}
+
 function confirmarEnvio() {
   const obs    = document.getElementById('emailObs').value.trim();
-  const pdfInfo = _currentPDFFiles[_currentChavePDF];
-  const fileId  = pdfInfo ? pdfInfo.fileId : '';
+  const sel    = document.getElementById('emailPdfSelect');
+  const fileId = sel ? sel.value : ((_currentPDFFiles[_currentChavePDF] || {}).fileId || '');
   const btn    = document.getElementById('emailSendBtn');
   const errEl  = document.getElementById('emailError');
 
@@ -1668,6 +1781,14 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 document.querySelectorAll('.modal-overlay').forEach(el => {
   el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
 });
+
+let _depAlertTimer;
+function showDepAlert() {
+  const el = document.getElementById('depAlert');
+  el.classList.add('show');
+  clearTimeout(_depAlertTimer);
+  _depAlertTimer = setTimeout(() => el.classList.remove('show'), 3500);
+}
 
 let _toastTimer;
 function toast(msg, ok) {
@@ -1844,6 +1965,8 @@ function abrirSeletorAlunos(chaves) {
   const pdfNameInput = document.getElementById('pdfNameInput');
   if (!_pdfMergeMode && _pdfChaves.length === 1) {
     pdfNameInput.value = 'Relatório Bolsistas - ' + _pdfChaves[0];
+    const defaultOrigem = (base.find(r => r.chavePDF === _pdfChaves[0]) || {}).origemBolsa || '';
+    document.getElementById('pdfOrigemInput').value = defaultOrigem;
     pdfNameRow.style.display = '';
   } else {
     pdfNameRow.style.display = 'none';
@@ -1891,13 +2014,14 @@ function confirmarGerarPDF() {
   if (_pdfMergeMode) {
     _execGerarMesclado(_pdfChaves, excluded);
   } else {
-    const customTitle = (document.getElementById('pdfNameInput').value || '').trim();
-    _execGerarPDF(_pdfChaves[0], excluded, customTitle);
+    const customTitle  = (document.getElementById('pdfNameInput').value || '').trim();
+    const customOrigem = (document.getElementById('pdfOrigemInput').value || '').trim();
+    _execGerarPDF(_pdfChaves[0], excluded, customTitle, customOrigem);
   }
 }
 
 // ─── Execução real de PDF ─────────────────────────────────────
-function _execGerarPDF(chavePDF, excluded, customTitle) {
+function _execGerarPDF(chavePDF, excluded, customTitle, customOrigem) {
   const safeId = btoa(unescape(encodeURIComponent(chavePDF))).replace(/=/g,'');
   const genBtn = document.getElementById('rgen-' + safeId);
   if (genBtn) { genBtn.disabled = true; genBtn.textContent = 'Gerando…'; }
@@ -1917,7 +2041,7 @@ function _execGerarPDF(chavePDF, excluded, customTitle) {
       if (genBtn) { genBtn.disabled = false; genBtn.textContent = '📄 PDF'; }
       toast('Erro: ' + (err.message||err), false);
     })
-    .gerarPDF(TOKEN, chavePDF, JSON.stringify(excluded), customTitle || '');
+    .gerarPDF(TOKEN, chavePDF, JSON.stringify(excluded), customTitle || '', customOrigem || '');
 }
 function _execGerarMesclado(chaves, excluded) {
   toast('Gerando PDF mesclado…', true);
@@ -2064,6 +2188,8 @@ function openPreview(chavePDF) {
     <div id="pdfNameRow" style="display:none;margin-top:14px">
       <label style="font-size:.78rem;color:var(--gray-600);display:block;margin-bottom:4px;font-weight:500">Nome do arquivo PDF</label>
       <input id="pdfNameInput" type="text" style="width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;font-size:.83rem;color:var(--gray-700);outline:none" onfocus="this.style.borderColor='var(--navy-400)'" onblur="this.style.borderColor='var(--gray-200)'">
+      <label style="font-size:.78rem;color:var(--gray-600);display:block;margin-bottom:4px;font-weight:500;margin-top:10px">Nome da parceria no PDF</label>
+      <input id="pdfOrigemInput" type="text" style="width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;font-size:.83rem;color:var(--gray-700);outline:none" onfocus="this.style.borderColor='var(--navy-400)'" onblur="this.style.borderColor='var(--gray-200)'">
     </div>
     <div class="modal-actions" style="margin-top:16px">
       <button class="modal-cancel" onclick="closeModal('alunosModal')">Cancelar</button>

@@ -11,9 +11,10 @@ const FUNCIONARIOS_SHEET_ID   = '1BDiPjv0FqRJp5EwcvLdYXVvEAWesvwdEgbhYdnTlqPY';
 const BRASAS_LOGO_FILE_ID      = '1fqZbnxHJNyov_9NwhwDAg235FizcnTGQ';
 const PARTNER_LOGOS_FOLDER_ID  = '1sKrz_-odKjx6YNVCSWpB5eW9v3atEvQD';
 
-const EDIT_ROLES       = ['admin', 'secretaria', 'diretor', 'b2b'];
+const EDIT_ROLES       = ['admin', 'secretaria', 'diretor', 'b2b', 'operacional'];
 const EMAIL_ROLES      = ['admin', 'b2b'];
 const ADMIN_ROLES      = ['admin'];
+const LOCK_EXEMPT_ROLES = ['admin', 'b2b', 'operacional'];
 
 // ─── Entry point ────────────────────────────────────────────
 function doGet(e) {
@@ -59,20 +60,21 @@ function _getUser(token) {
     const role  = String(rows[i][3]).trim().toLowerCase();
     const email = String(rows[i][1]).trim().toLowerCase();
 
-    if (!_hasAccess(ss, role, email)) {
-      throw new Error('Sem permissão para acessar o painel de bolsistas.');
-    }
+    const access = _hasAccess(ss, role, email);
+    if (!access) throw new Error('Sem permissão para acessar o painel de bolsistas.');
 
     const unidade = _getUserUnidade(ss, email);
 
     const userObj = {
       email,
-      nome:         String(rows[i][2]).trim(),
+      nome:              String(rows[i][2]).trim(),
       role,
       unidade,
-      canEdit:      EDIT_ROLES.includes(role),
-      canSendEmail: EMAIL_ROLES.includes(role),
-      isAdmin:      ADMIN_ROLES.includes(role),
+      canEdit:           EDIT_ROLES.includes(role),
+      canSendEmail:      EMAIL_ROLES.includes(role),
+      isAdmin:           ADMIN_ROLES.includes(role),
+      canViewAlunos:     access.canViewAlunos,
+      canViewRelatorios: access.canViewRelatorios,
     };
 
     try { cache.put(cacheKey, JSON.stringify(userObj), 600); } catch(e) {}
@@ -99,7 +101,7 @@ function _hasAccess(ss, role, email) {
     .normalize('NFD').replace(/[̀-ͯ]/g, '');
 
   const usuSheet = ss.getSheetByName('USUARIOS');
-  if (!usuSheet) return false;
+  if (!usuSheet) return null;
 
   const d = usuSheet.getDataRange().getValues();
   for (let i = 1; i < d.length; i++) {
@@ -109,10 +111,16 @@ function _hasAccess(ss, role, email) {
       .join(',')
       .split(',')
       .map(s => norm(s));
-    return acessos.includes('bolsistas');
+
+    const hasFull = acessos.includes('bolsistas');
+    const canViewAlunos      = hasFull || acessos.includes('bolsistas_alunos');
+    const canViewRelatorios  = hasFull || acessos.includes('bolsistas_relatorios');
+
+    if (!canViewAlunos && !canViewRelatorios) return null;
+    return { canViewAlunos, canViewRelatorios };
   }
 
-  return false;
+  return null;
 }
 
 // ─── Init unificado (filtros + dados, com cache) ─────────────
@@ -250,11 +258,14 @@ function initApp(token) {
       });
     }
 
+    const isEditLocked = !LOCK_EXEMPT_ROLES.includes(user.role) && _isPastFifthBusinessDay();
+
     const result = JSON.stringify({
       ok:       true,
       rows,
       feriados,
       funcionarios,
+      isEditLocked,
       anos:     [...anos].sort().reverse(),
       meses:    [...meses],
       unidades: [...unidades].sort(),
@@ -401,6 +412,10 @@ function updateBolsista(token, payloadJson) {
     const user = _getUser(token);
     if (!user.canEdit) throw new Error('Sem permissão para editar.');
 
+    if (!LOCK_EXEMPT_ROLES.includes(user.role) && _isPastFifthBusinessDay()) {
+      throw new Error('Edição bloqueada após o 5º dia útil do mês.');
+    }
+
     const { rowIndex, field, value } = JSON.parse(payloadJson);
 
     const FIELD_COL = {
@@ -437,6 +452,15 @@ function updateBolsista(token, payloadJson) {
 
     const col = FIELD_COL[field];
     if (!col) throw new Error('Campo não editável: ' + field);
+
+    if (field === 'dependenteUnidade' || field === 'dependenteNome') {
+      const ss2   = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+      const sh2   = ss2.getSheetByName('Bolsistas App');
+      const rowOrigem = String(sh2.getRange(rowIndex, 8, 1, 1).getValue() || '').toLowerCase();
+      if (!rowOrigem.includes('dependente brasas')) {
+        throw new Error('Este campo só pode ser editado para bolsistas Dependente BRASAS.');
+      }
+    }
 
     const ss    = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
     const sheet = ss.getSheetByName('Bolsistas App');
@@ -701,7 +725,8 @@ function getEmailPreview(token, chavePDF) {
     }
 
     const obsExtras = rows.map(r => String(r[27] || '').trim()).filter(Boolean);
-    const parts = chavePDF.split(' - ');
+    const parts   = chavePDF.split(' - ');
+    const pdfList = _listPDFsNaPasta(origemBolsa);
 
     return JSON.stringify({
       ok: true,
@@ -711,10 +736,46 @@ function getEmailPreview(token, chavePDF) {
       parceiro,
       totalAlunos: rows.length,
       obsExtras,
+      pdfList,
     });
   } catch (e) {
     return JSON.stringify({ ok: false, error: e.message });
   }
+}
+
+// ─── Helper: lista PDFs salvos para um parceiro no Drive ─────
+function _listPDFsNaPasta(origemBolsa) {
+  try {
+    // Tenta localizar pela hierarquia de pastas primeiro
+    const roots = DriveApp.getFoldersByName('Relatórios Bolsistas');
+    if (roots.hasNext()) {
+      const root = roots.next();
+      const subs = root.getFoldersByName(origemBolsa);
+      if (subs.hasNext()) {
+        const folder = subs.next();
+        const iter   = folder.getFilesByType('application/pdf');
+        const result = [];
+        while (iter.hasNext()) {
+          const f = iter.next();
+          result.push({ name: f.getName().replace(/\.pdf$/i, ''), fileId: f.getId(), viewUrl: f.getUrl() });
+        }
+        result.sort((a, b) => b.name.localeCompare(a.name));
+        if (result.length) return result;
+      }
+    }
+    // Fallback: busca por nome de arquivo contendo a origem da bolsa
+    const safe  = origemBolsa.replace(/'/g, "\\'");
+    const iter2 = DriveApp.searchFiles(
+      "mimeType='application/pdf' and title contains '" + safe + "' and trashed=false"
+    );
+    const result2 = [];
+    while (iter2.hasNext()) {
+      const f = iter2.next();
+      result2.push({ name: f.getName().replace(/\.pdf$/i, ''), fileId: f.getId(), viewUrl: f.getUrl() });
+    }
+    result2.sort((a, b) => b.name.localeCompare(a.name));
+    return result2;
+  } catch(e) { return []; }
 }
 
 // ─── Helper: logo do parceiro na pasta do Drive ──────────────
@@ -735,113 +796,135 @@ function _getPartnerLogoBlob(origemBolsa) {
 }
 
 // ─── Constrói seção de relatório dentro de um Doc ────────────
-function _buildPDFSection(body, rows, origemBolsa, mes, ano, isFirst) {
+function _buildPDFSection(body, rows, origemBolsa, mes, ano, isFirst, customOrigemBolsa) {
   const NAVY       = '#1d3557';
+  const NAVY_B     = '#2a4d76';
   const STEEL      = '#334155';
   const LIGHT_BLUE = '#dce6f1';
   const WHITE      = '#ffffff';
   const GRAY       = '#64748b';
-  const BORDER     = '#c9d4e0';
-
   if (!isFirst) body.appendPageBreak();
 
-  // ── Cabeçalho: logo parceiro | título | logo BRASAS ──
+  // logos=500, title=428, legend=500 → centro do title = 714pt = centro da página ✓
+  // dois logos lado a lado em 500pt: 244+8+244=496 < 500 ✓
+  const LOGO_MAX_W = 244, LOGO_MAX_H = 140;
+
+  // ── Faixa 1: logos (esq) | título+card (centro) | legenda+conceito (dir) ──
+  // 500 + 428 + 500 = 1428
   const hdrTbl = body.appendTable([['', '', '']]);
   hdrTbl.setBorderWidth(0);
+  hdrTbl.getRow(0).getCell(0).setWidth(500);
+  hdrTbl.getRow(0).getCell(1).setWidth(428);
+  hdrTbl.getRow(0).getCell(2).setWidth(500);
 
-  // Esquerda: logo do parceiro
-  const cParc = hdrTbl.getCell(0, 0);
-  const partnerBlob = _getPartnerLogoBlob(origemBolsa);
-  if (partnerBlob) {
-    try {
-      cParc.editAsText().setText('');
-      const img = cParc.getChild(0).asParagraph().appendInlineImage(partnerBlob);
-      const w = img.getWidth(), h = img.getHeight();
-      if (w > 140 || h > 50) { const s = Math.min(140/w, 50/h); img.setWidth(Math.round(w*s)).setHeight(Math.round(h*s)); }
-    } catch(e2) {
-      cParc.editAsText().setText(origemBolsa).setFontSize(12).setFontFamily('Arial').setBold(true).setForegroundColor(NAVY);
-    }
-  } else {
-    cParc.editAsText().setText(origemBolsa).setFontSize(13).setFontFamily('Arial').setBold(true).setForegroundColor(NAVY);
-  }
-  // Centro: título
-  const cTit = hdrTbl.getCell(0, 1);
-  cTit.editAsText().setText('RELATÓRIO DE BOLSISTAS').setBold(true).setFontSize(26).setFontFamily('Arial').setForegroundColor(NAVY);
-  const subPara = cTit.appendParagraph(`${origemBolsa}  ·  ${mes} / ${ano}`);
-  subPara.editAsText().setFontSize(12).setFontFamily('Arial').setBold(false).setForegroundColor(STEEL);
-  // Alinhamento central nos parágrafos do título
-  for (let ci = 0; ci < cTit.getNumChildren(); ci++) {
-    const ch = cTit.getChild(ci);
-    if (ch.getType() === DocumentApp.ElementType.PARAGRAPH) {
-      ch.asParagraph().setAlignment(DocumentApp.HorizontalAlignment.CENTER);
-    }
-  }
+  // Esquerda: BRASAS logo + parceiro logo no mesmo parágrafo (lado a lado)
+  const cLogos = hdrTbl.getCell(0, 0);
+  cLogos.editAsText().setText('');
+  const logoPara = cLogos.getChild(0).asParagraph();
 
-  // Direita: logo BRASAS (alinhado à direita via parágrafo)
-  const cBrs = hdrTbl.getCell(0, 2);
+  let brasasAdded = false;
   if (BRASAS_LOGO_FILE_ID) {
     try {
-      cBrs.editAsText().setText('');
-      const bPara = cBrs.getChild(0).asParagraph();
-      bPara.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
-      const bImg = bPara.appendInlineImage(DriveApp.getFileById(BRASAS_LOGO_FILE_ID).getBlob());
-      const w = bImg.getWidth(), h = bImg.getHeight();
-      if (w > 500 || h > 170) { const s = Math.min(500/w, 170/h); bImg.setWidth(Math.round(w*s)).setHeight(Math.round(h*s)); }
+      const bImg = logoPara.appendInlineImage(DriveApp.getFileById(BRASAS_LOGO_FILE_ID).getBlob());
+      const bw = bImg.getWidth(), bh = bImg.getHeight();
+      const bs = Math.min(LOGO_MAX_W / bw, LOGO_MAX_H / bh);
+      bImg.setWidth(Math.round(bw * bs)).setHeight(Math.round(bh * bs));
+      brasasAdded = true;
     } catch(e2) {
-      cBrs.editAsText().setText('BRASAS').setBold(true).setFontSize(15).setFontFamily('Arial').setForegroundColor(NAVY);
-      cBrs.appendParagraph('ENGLISH COURSE').editAsText().setFontSize(9).setFontFamily('Arial').setBold(false).setForegroundColor(GRAY);
+      cLogos.editAsText().setText('BRASAS').setFontSize(14).setFontFamily('Arial').setBold(true).setForegroundColor(NAVY);
     }
   } else {
-    cBrs.editAsText().setText('BRASAS').setBold(true).setFontSize(12).setFontFamily('Arial').setForegroundColor(NAVY);
-    cBrs.appendParagraph('ENGLISH COURSE').editAsText().setFontSize(7).setFontFamily('Arial').setBold(false).setForegroundColor(GRAY);
+    cLogos.editAsText().setText('BRASAS').setFontSize(14).setFontFamily('Arial').setBold(true).setForegroundColor(NAVY);
   }
 
-  // Linha em branco pequena
-  body.appendParagraph('').editAsText().setFontSize(4);
+  // Parceiro logo: no mesmo parágrafo → lado a lado com BRASAS
+  // Se não encontrar, deixa em branco (não adiciona texto)
+  const partnerBlob = _getPartnerLogoBlob(origemBolsa);
+  if (partnerBlob && brasasAdded) {
+    try {
+      logoPara.appendText('  ');
+      const pImg = logoPara.appendInlineImage(partnerBlob);
+      const pw = pImg.getWidth(), ph = pImg.getHeight();
+      const ps = Math.min(LOGO_MAX_W / pw, LOGO_MAX_H / ph);
+      pImg.setWidth(Math.round(pw * ps)).setHeight(Math.round(ph * ps));
+    } catch(e2) { /* sem logo de parceiro — silencioso */ }
+  }
 
-  // ── Legenda (2 colunas) ──
-  const legTbl = body.appendTable([['', '']]);
-  legTbl.setBorderWidth(0);
-  legTbl.getCell(0, 0).setWidth(860);
-  legTbl.getCell(0, 1).setWidth(568);
-  const cLeg = legTbl.getCell(0, 0);
-  cLeg.editAsText().setText('Legenda:').setBold(true).setFontSize(12).setFontFamily('Arial').setForegroundColor(NAVY);
-  ['MT - Midterm Test - Prova realizada na metade do módulo',
-   'WT - Written Test - Prova escrita',
-   'OC - Oral Comprehension - Prova de compreensão oral',
-   'OT - Oral Test - Prova Oral',
-   'T1 - Teste 1',
-   'T2 - Teste 2'].forEach(function(t) {
-    cLeg.appendParagraph(t).editAsText().setFontSize(11).setFontFamily('Arial').setBold(false).setForegroundColor(STEEL);
-  });
-  const cConc = legTbl.getCell(0, 1);
-  cConc.editAsText().setText('Conceito:').setBold(true).setFontSize(12).setFontFamily('Arial').setForegroundColor(NAVY);
-  ['E - Excelente','MB - Muito Bom','B - Bom','R - Regular','I - Insuficiente','N - Nulo'].forEach(function(t) {
-    cConc.appendParagraph(t).editAsText().setFontSize(11).setFontFamily('Arial').setBold(false).setForegroundColor(STEEL);
+  // Centro: título + card de alunos (centralizado, só borda)
+  const cTit = hdrTbl.getCell(0, 1);
+  const displayOrigem = (customOrigemBolsa || '').trim() || origemBolsa;
+  cTit.editAsText().setText('RELATÓRIO DE BOLSISTAS').setBold(true).setFontSize(22).setFontFamily('Arial').setForegroundColor(NAVY);
+  const subPara = cTit.appendParagraph(displayOrigem + '  ·  ' + mes + ' / ' + ano);
+  subPara.editAsText().setFontSize(13).setFontFamily('Arial').setBold(false).setForegroundColor(STEEL);
+  for (let ci = 0; ci < cTit.getNumChildren(); ci++) {
+    const ch = cTit.getChild(ci);
+    if (ch.getType() === DocumentApp.ElementType.PARAGRAPH)
+      ch.asParagraph().setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  }
+  // Card de alunos: compacto e centralizado
+  // Tabela espaçador 3-col (sem borda) → célula central tem tabela interna com borda
+  cTit.appendParagraph('').editAsText().setFontSize(4);
+  const spacerTbl = cTit.appendTable([['', '', '']]);
+  spacerTbl.setBorderWidth(0);
+  spacerTbl.getRow(0).getCell(0).setWidth(114);  // espaçador esq
+  spacerTbl.getRow(0).getCell(2).setWidth(114);  // espaçador dir
+  const midCell = spacerTbl.getRow(0).getCell(1);
+  midCell.setWidth(200);                          // 114+200+114=428 ✓
+  midCell.editAsText().setText('').setFontSize(1);
+  const cardNested = midCell.appendTable([['']]);
+  cardNested.setBorderWidth(1);
+  const cardCell = cardNested.getCell(0, 0);
+  cardCell.editAsText().setText('Quantidade de Alunos')
+    .setFontSize(8).setFontFamily('Arial').setBold(false).setForegroundColor(GRAY);
+  cardCell.getChild(0).asParagraph().setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  const numPara = cardCell.appendParagraph(String(rows.length));
+  numPara.editAsText().setFontSize(20).setFontFamily('Arial').setBold(true).setForegroundColor(NAVY);
+  numPara.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+
+  // Direita: legenda e conceito lado a lado (tabela aninhada 2 colunas)
+  // 249 + 249 = 498 dentro da coluna de 500pt
+  const cLeg = hdrTbl.getCell(0, 2);
+  cLeg.editAsText().setText('').setFontSize(1);
+  const legNested = cLeg.appendTable([['', '']]);
+  legNested.setBorderWidth(0);
+  legNested.getRow(0).getCell(0).setWidth(249);
+  legNested.getRow(0).getCell(1).setWidth(249);
+
+  const cAbbr = legNested.getRow(0).getCell(0);
+  cAbbr.editAsText().setText('Legenda:').setBold(true).setFontSize(10).setFontFamily('Arial').setForegroundColor(NAVY);
+  ['MT - Midterm Test', 'WT - Written Test', 'OC - Oral Comprehension', 'OT - Oral Test', 'T1 - Teste 1', 'T2 - Teste 2'].forEach(function(t) {
+    cAbbr.appendParagraph(t).editAsText().setFontSize(9).setFontFamily('Arial').setBold(false).setForegroundColor(STEEL);
   });
 
-  body.appendParagraph('').editAsText().setFontSize(4);
+  const cConc = legNested.getRow(0).getCell(1);
+  cConc.editAsText().setText('Conceito:').setBold(true).setFontSize(10).setFontFamily('Arial').setForegroundColor(NAVY);
+  ['E - Excelente', 'MB - Muito Bom', 'B - Bom', 'R - Regular', 'I - Insuficiente', 'N - Nulo'].forEach(function(t) {
+    cConc.appendParagraph(t).editAsText().setFontSize(9).setFontFamily('Arial').setBold(false).setForegroundColor(STEEL);
+  });
+
+  body.appendParagraph('').editAsText().setFontSize(3);
 
   // ── Tabela de dados ──
   const hdrs = [
-    'Aluno', 'Unidade', '% Bolsa', 'Módulo', 'Freq. / Horário',
-    'Início\nMódulo', 'Prev.\nConclusão', 'Aulas\nPrev.', 'Aulas\nAssist.',
-    'Faltas\n/Mês', 'Valor', 'T1', 'T2', 'MT', 'WT', 'OC', 'OT',
+    'Aluno', 'Unidade', '% Bolsa', 'Módulo', 'Freq. / Horário\n/ Dias Aula',
+    'Data\n1ª Aula', 'Início\nMódulo', 'Prev.\nConclusão',
+    'Aulas\nPrev.', 'Aulas\nAssist.', 'Faltas\n/Mês',
+    'Valor', 'T1', 'T2', 'MT', 'WT', 'OC', 'OT',
     'Média Final', 'Conceito', 'Observações',
   ];
 
   const tableData = [hdrs];
-  rows.forEach(r => {
+  rows.forEach(function(r) {
     const wt = parseFloat(r[18]), oc = parseFloat(r[19]), ot = parseFloat(r[20]);
     const mt = parseFloat(r[17]);
     let nota = '';
     if (!isNaN(wt) && !isNaN(oc) && !isNaN(ot)) nota = ((wt + oc + ot) / 3).toFixed(1);
     else if (!isNaN(mt)) nota = Number(mt).toFixed(1);
     const notaN = parseFloat(nota);
-    const dias  = parseFloat(r[15]);
-    let aprov   = String(r[21] || '');
+    const diasAssist = parseFloat(r[15]);
+    let aprov = String(r[21] || '');
     if (nota !== '') {
-      if (!isNaN(dias) && dias <= 1) aprov = 'N';
+      if (!isNaN(diasAssist) && diasAssist <= 1) aprov = 'N';
       else if (notaN >= 90) aprov = 'E';
       else if (notaN >= 80) aprov = 'MB';
       else if (notaN >= 70) aprov = 'B';
@@ -851,12 +934,17 @@ function _buildPDFSection(body, rows, origemBolsa, mes, ano, isFirst) {
     const falta = (r[14] !== '' || r[15] !== '')
       ? String((parseFloat(r[14]) || 0) - (parseFloat(r[15]) || 0)) : '';
 
+    const diasAulaStr = String(r[29] || '').trim();
+    const freqHorDias = (r[10] || '') + ' / ' + (r[13] || '') +
+      (diasAulaStr ? '\n' + diasAulaStr : '');
+
     tableData.push([
       String(r[5]  || ''),
       String(r[2]  || ''),
       r[6]  !== '' ? String(r[6]) + '%' : '',
       String(r[9]  || ''),
-      `${r[10] || ''} / ${r[13] || ''}`,
+      freqHorDias,
+      _fmtDate(r[8]),
       _fmtDate(r[11]),
       _fmtDate(r[12]),
       r[14] !== '' ? String(r[14]) : '',
@@ -878,12 +966,17 @@ function _buildPDFSection(body, rows, origemBolsa, mes, ano, isFirst) {
   const table = body.appendTable(tableData);
   table.setBorderWidth(0.3);
 
-  // Larguras das colunas somando ~1428 pts (página 1500 - margens 36×2)
-  const colWidths = [140,72,42,85,110,78,78,48,48,48,70,35,35,35,35,35,35,62,60,277];
+  // Larguras somando 1428 pts (página 1500 - margens 36×2)
+  const colWidths = [135,68,38,80,120,62,75,75,46,46,46,68,33,33,33,33,33,33,60,58,253];
+  // Grupo de cada coluna (alterna NAVY / NAVY_B no cabeçalho para separação visual)
+  // G0: Aluno,Unidade,%Bolsa,Módulo | G1: Freq,Data1ªAula,InícioMód,PrevConc
+  // G2: AulasPrev,AulasAssist,Faltas,Valor | G3: T1,T2,MT,WT,OC,OT
+  // G4: MédiaFinal,Conceito | G5: Observações
+  const colGroup = [0,0,0,0, 1,1,1,1, 2,2,2,2, 3,3,3,3,3,3, 4,4, 5];
   const hRow = table.getRow(0);
   for (let c = 0; c < hdrs.length; c++) {
-    hRow.getCell(c).setBackgroundColor(NAVY)
-      .editAsText().setForegroundColor(WHITE).setBold(true).setFontSize(12).setFontFamily('Arial');
+    hRow.getCell(c).setBackgroundColor(colGroup[c] % 2 === 0 ? NAVY : NAVY_B)
+      .editAsText().setForegroundColor(WHITE).setBold(true).setFontSize(10).setFontFamily('Arial');
     if (colWidths[c]) hRow.getCell(c).setWidth(colWidths[c]);
   }
   for (let ri = 1; ri < table.getNumRows(); ri++) {
@@ -894,12 +987,6 @@ function _buildPDFSection(body, rows, origemBolsa, mes, ano, isFirst) {
     }
   }
 
-  // ── Rodapé ──
-  body.appendParagraph(
-    `Total: ${rows.length} aluno${rows.length !== 1 ? 's' : ''}  ·  ` +
-    Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'dd/MM/yyyy HH:mm') +
-    '  ·  BRASAS English Course'
-  ).editAsText().setFontSize(9).setFontFamily('Arial').setForegroundColor(GRAY);
 }
 
 // ─── Salva PDF no Drive (helper interno) ─────────────────────
@@ -932,7 +1019,7 @@ function _savePDF(docId, docTitle, origemBolsa) {
 }
 
 // ─── Geração de PDF (parceiro único) ─────────────────────────
-function gerarPDF(token, chavePDF, excludedRowsJson, customTitle) {
+function gerarPDF(token, chavePDF, excludedRowsJson, customTitle, customOrigemBolsa) {
   try {
     const user     = _getUser(token);
     if (!user.canSendEmail) throw new Error('Sem permissão para gerar PDF.');
@@ -955,14 +1042,14 @@ function gerarPDF(token, chavePDF, excludedRowsJson, customTitle) {
     const ano         = parts[0] || '';
     const mes         = parts[1] || '';
 
-    const docTitle = (customTitle || '').trim() || `Relatório Bolsistas — ${chavePDF}`;
+    const docTitle = (customTitle || '').trim() || 'Relatório Bolsistas — ' + chavePDF;
     const doc  = DocumentApp.create(docTitle);
     const body = doc.getBody();
     body.clear();
     body.setPageWidth(1500).setPageHeight(850);
     body.setMarginTop(28).setMarginBottom(28).setMarginLeft(36).setMarginRight(36);
 
-    _buildPDFSection(body, rows, origemBolsa, mes, ano, true);
+    _buildPDFSection(body, rows, origemBolsa, mes, ano, true, customOrigemBolsa || '');
     doc.saveAndClose();
     return _savePDF(doc.getId(), docTitle, origemBolsa);
   } catch (e) {
@@ -1054,6 +1141,11 @@ function enviarEmail(token, payloadJson) {
       }
     }
     if (!to) throw new Error('E-mail do parceiro não encontrado para: ' + origemBolsa);
+
+    // CCs fixos sempre incluídos
+    const fixedCC = ['adriane@brasas.com', 'administrativo@brasas.com'];
+    const allCC   = [...(cc ? cc.split(',') : []), ...fixedCC].filter(Boolean);
+    cc = allCC.join(',');
 
     // Anexo PDF
     const attachments = [];
@@ -1175,6 +1267,28 @@ function _buildEmailHtml(origemBolsa, mes, ano, rows, obsExtra) {
 
   </div>
 </body></html>`;
+}
+
+// ─── Bloqueio após 5º dia útil ───────────────────────────────
+function _isPastFifthBusinessDay() {
+  const cache     = CacheService.getScriptCache();
+  const ferCached = cache.get('feriados_v1');
+  const feriados  = ferCached ? JSON.parse(ferCached) : [];
+
+  const now   = new Date();
+  const year  = now.getFullYear();
+  const month = now.getMonth();
+  const today = now.getDate();
+
+  let bizDays = 0;
+  for (let d = 1; d <= today; d++) {
+    const dt  = new Date(year, month, d);
+    if (dt.getDay() === 0 || dt.getDay() === 6) continue; // fim de semana
+    const fmt = String(d).padStart(2,'0') + '/' + String(month+1).padStart(2,'0') + '/' + year;
+    if (feriados.includes(fmt)) continue; // feriado
+    if (++bizDays >= 5) return true;
+  }
+  return false;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────
