@@ -486,6 +486,8 @@ td.editable.saving{opacity:.6;pointer-events:none}
     <button class="tab-btn active" data-tab="alunos" onclick="switchTab('alunos')">Alunos</button>
     <button class="tab-btn" data-tab="relatorios" onclick="switchTab('relatorios')">Relatórios</button>
     <button class="tab-btn" data-tab="historico" onclick="switchTab('historico')" style="display:none">Histórico</button>
+    <button class="tab-btn" data-tab="motivos" onclick="switchTab('motivos')" style="display:none">Motivos de Desconto</button>
+    <button class="tab-btn" data-tab="liberacoes" onclick="switchTab('liberacoes')" style="display:none">Liberações</button>
   </nav>
 
   <div class="app-body">
@@ -518,13 +520,6 @@ td.editable.saving{opacity:.6;pointer-events:none}
         <label class="filter-label">Origem da Bolsa</label>
         <div class="multi-select" id="msOrigem" data-placeholder="Todas" style="min-width:220px">
           <div class="ms-trigger" onclick="toggleMS('msOrigem')"><span class="ms-label">Todas</span><span class="ms-arrow">▾</span></div>
-          <div class="ms-panel"></div>
-        </div>
-      </div>
-      <div class="filter-group">
-        <label class="filter-label">Nome Funcionário BRASAS</label>
-        <div class="multi-select" id="msFuncionario" data-placeholder="Todos" style="min-width:200px">
-          <div class="ms-trigger" onclick="toggleMS('msFuncionario')"><span class="ms-label">Todos</span><span class="ms-arrow">▾</span></div>
           <div class="ms-panel"></div>
         </div>
       </div>
@@ -788,8 +783,89 @@ td.editable.saving{opacity:.6;pointer-events:none}
     </div>
   </div>
 
+  <div id="viewMotivos" style="display:none;padding:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <span class="table-header-title">Motivos de Desconto</span>
+      <button id="btnAddMotivo" onclick="addMotivoRow()" style="padding:7px 16px;font-size:.82rem;font-weight:600;background:var(--navy-600);color:#fff;border:none;border-radius:6px;cursor:pointer">+ Adicionar motivo</button>
+    </div>
+    <div class="table-wrap" style="max-width:700px;margin:0 auto">
+      <div class="table-scroll" style="max-height:calc(100vh - 280px)">
+        <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+          <thead>
+            <tr>
+              <th style="padding:10px 14px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200)">Motivo de Desconto</th>
+              <th style="padding:10px 14px;text-align:center;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200);width:160px">Considerar</th>
+              <th style="padding:10px 14px;background:var(--gray-50);border-bottom:1px solid var(--gray-200);width:48px"></th>
+            </tr>
+          </thead>
+          <tbody id="motivosBody">
+            <tr><td colspan="3"><div class="empty-state"><div class="empty-icon">📋</div><p>Carregando…</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="viewLiberacoes" style="display:none;padding:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <span class="table-header-title">Liberações Temporárias de Edição</span>
+    </div>
+    <div style="max-width:640px;margin:0 auto">
+      <!-- Adicionar liberação -->
+      <div style="background:#fff;border:1px solid var(--gray-200);border-radius:var(--radius);padding:18px 20px;margin-bottom:20px">
+        <div style="font-size:.82rem;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Nova liberação (24h)</div>
+        <div style="display:flex;gap:10px">
+          <input id="libEmail" type="email" placeholder="e-mail do usuário" style="flex:1;border:1px solid var(--gray-200);border-radius:6px;padding:8px 12px;font-size:.85rem;color:var(--gray-700);outline:none" onfocus="this.style.borderColor='var(--navy-400)'" onblur="this.style.borderColor='var(--gray-200)'">
+          <button onclick="grantAccess()" style="padding:8px 18px;font-size:.82rem;font-weight:600;background:var(--navy-600);color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap">Liberar 24h</button>
+        </div>
+      </div>
+      <!-- Lista de liberações -->
+      <div class="table-wrap">
+        <div class="table-scroll" style="max-height:calc(100vh - 360px)">
+          <table style="width:100%;border-collapse:collapse;font-size:.83rem">
+            <thead>
+              <tr>
+                <th style="padding:10px 14px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200)">E-mail</th>
+                <th style="padding:10px 14px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200)">Liberado por</th>
+                <th style="padding:10px 14px;text-align:left;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200);white-space:nowrap">Expira em</th>
+                <th style="padding:10px 14px;text-align:center;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200);width:80px">Status</th>
+                <th style="padding:10px 14px;background:var(--gray-50);border-bottom:1px solid var(--gray-200);width:48px"></th>
+              </tr>
+            </thead>
+            <tbody id="liberacoesBody">
+              <tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🔓</div><p>Carregando…</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
   </div><!-- /app-body -->
 </div><!-- /app -->
+
+<!-- Modal: e-mail de liberação -->
+<div id="libEmailOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1200;align-items:center;justify-content:center" onclick="if(event.target===this)closeLibEmailModal()">
+  <div style="background:#fff;border-radius:var(--radius);box-shadow:0 8px 32px rgba(0,0,0,.18);width:100%;max-width:460px;padding:24px 28px;margin:16px">
+    <div style="font-size:1rem;font-weight:700;color:var(--navy-700);margin-bottom:16px">Enviar e-mail de liberação</div>
+    <div style="margin-bottom:10px">
+      <label style="font-size:.75rem;font-weight:600;color:var(--gray-500);display:block;margin-bottom:4px">PARA</label>
+      <input id="libEmailTo" type="text" readonly style="width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;font-size:.85rem;color:var(--gray-500);background:var(--gray-50)">
+    </div>
+    <div style="margin-bottom:10px">
+      <label style="font-size:.75rem;font-weight:600;color:var(--gray-500);display:block;margin-bottom:4px">ASSUNTO</label>
+      <input type="text" readonly value="Liberação App de Bolsistas para edição" style="width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;font-size:.85rem;color:var(--gray-500);background:var(--gray-50)">
+    </div>
+    <div style="margin-bottom:18px">
+      <label style="font-size:.75rem;font-weight:600;color:var(--gray-500);display:block;margin-bottom:4px">MENSAGEM</label>
+      <textarea id="libEmailBody" rows="5" placeholder="Digite a mensagem…" style="width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:8px 10px;font-size:.85rem;color:var(--gray-700);resize:vertical;outline:none;font-family:var(--font)" onfocus="this.style.borderColor='var(--navy-400)'" onblur="this.style.borderColor='var(--gray-200)'"></textarea>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button onclick="closeLibEmailModal()" style="padding:8px 18px;font-size:.83rem;font-weight:600;border:1px solid var(--gray-200);border-radius:6px;background:#fff;color:var(--gray-600);cursor:pointer">Cancelar</button>
+      <button onclick="sendLibEmail()" style="padding:8px 18px;font-size:.83rem;font-weight:600;background:var(--navy-600);color:#fff;border:none;border-radius:6px;cursor:pointer">Enviar e-mail</button>
+    </div>
+  </div>
+</div>
 
 <!-- Detail panel -->
 <div class="detail-overlay" id="detailOverlay" onclick="closeDetail()"></div>
@@ -931,7 +1007,9 @@ function onSessionValidated(jsonStr) {
   document.querySelector('[data-tab="alunos"]').style.display     = USER.canViewAlunos     ? '' : 'none';
   document.querySelector('[data-tab="relatorios"]').style.display = USER.canViewRelatorios ? '' : 'none';
   if (USER.isAdmin || USER.canViewHistorico) document.querySelector('[data-tab="historico"]').style.display = '';
-  switchTab(USER.canViewAlunos ? 'alunos' : 'relatorios');
+  if (USER.canViewMotivos) document.querySelector('[data-tab="motivos"]').style.display = '';
+  if (USER.canViewLiberacoes) document.querySelector('[data-tab="liberacoes"]').style.display = '';
+  switchTab(USER.canViewAlunos ? 'alunos' : USER.canViewRelatorios ? 'relatorios' : USER.canViewMotivos ? 'motivos' : 'liberacoes');
 
   // Mostra o app imediatamente com spinner interno na tabela
   document.getElementById('loadingScreen').style.display = 'none';
@@ -967,8 +1045,6 @@ function onAppData(jsonStr) {
 
   FERIADOS     = new Set(res.feriados || []);
   FUNCIONARIOS = res.funcionarios || { unidades: [], porUnidade: {} };
-  const allFuncs = Object.values(FUNCIONARIOS.porUnidade).flat().filter((n,i,a) => n && a.indexOf(n)===i).sort();
-  buildMS('msFuncionario', allFuncs, 'applyFilters', { searchable: true });
 
   if (res.isEditLocked && USER) USER.canEdit = false;
   FULL_ROWS    = res.rows;
@@ -1075,7 +1151,6 @@ function applyFilters() {
   const ano         = getMS('msAno');
   const unidade     = getMS('msUnidade');
   const origemBolsa  = getMS('msOrigem');
-  const funcionario  = getMS('msFuncionario');
   const busca        = document.getElementById('fBusca').value.trim();
   const pctMin      = parseInt(document.getElementById('fPctFaltas').value || '0') || 0;
   const editFilter  = document.getElementById('fEditado').value;
@@ -1086,7 +1161,6 @@ function applyFilters() {
     if (!inArr(r.ano,         ano))         return false;
     if (!inArr(r.unidade,     unidade))     return false;
     if (!inArr(r.origemBolsa,   origemBolsa))  return false;
-    if (!inArr(r.dependenteNome, funcionario)) return false;
     if (busca && !norm(r.nome).includes(buscaN) && !norm(r.turma).includes(buscaN)) return false;
     if (pctMin > 0 && !(r._pctFaltadosLivro !== '' && Number(r._pctFaltadosLivro) > pctMin)) return false;
     if (editFilter === 'sim' && !r.editadoWebapp) return false;
@@ -1098,7 +1172,7 @@ function applyFilters() {
 }
 
 function clearFilters() {
-  ['msAno','msMes','msUnidade','msOrigem','msFuncionario'].forEach(id => {
+  ['msAno','msMes','msUnidade','msOrigem'].forEach(id => {
     document.querySelectorAll(`#${id} .ms-panel input`).forEach(cb => cb.checked = false);
     updateMSLabel(id);
   });
@@ -1283,6 +1357,15 @@ function _renderDetail(r) {
       return `<div class="detail-field${clsStr}"><span class="detail-field-label">${label}</span>` +
         `<select class="detail-select" onchange="detailSave(${rowIdx},'${field}',this.value,'${_ea(v)}')">${opts}</select></div>`;
     }
+    if (type === 'combobox') {
+      const choices = selectOpts || [];
+      const dlId = `dl_${field}_${rowIdx}`;
+      const opts = choices.map(o => `<option value="${_ea(o)}">`).join('');
+      return `<div class="detail-field${clsStr}"><span class="detail-field-label">${label}</span>` +
+        `<input class="detail-input" list="${dlId}" value="${_ea(v)}" placeholder="Buscar…" ` +
+        `onblur="detailSave(${rowIdx},'${field}',this.value,'${_ea(v)}')">` +
+        `<datalist id="${dlId}">${opts}</datalist></div>`;
+    }
     if (type === 'textarea') {
       return `<div class="detail-field${clsStr}"><span class="detail-field-label">${label}</span>` +
         `<textarea class="detail-textarea" rows="3" onblur="detailSave(${rowIdx},'${field}',this.value,'${_ea(v)}')">${esc(v)}</textarea></div>`;
@@ -1302,7 +1385,7 @@ function _renderDetail(r) {
     (isDependente ?
       `<div class="detail-section"><div class="detail-section-title">Dependente BRASAS</div><div class="detail-grid">` +
         dEdit('Unidade do Funcionário', 'dependenteUnidade', 'select', null, ['', ...FUNCIONARIOS.unidades]) +
-        dEdit('Nome do Funcionário', 'dependenteNome', 'select', null, ['', ...(FUNCIONARIOS.porUnidade[r.dependenteUnidade] || Object.values(FUNCIONARIOS.porUnidade).flat().filter((n,i,a)=>a.indexOf(n)===i).sort())]) +
+        dEdit('Nome do Funcionário', 'dependenteNome', 'combobox', null, ['', ...(FUNCIONARIOS.porUnidade[r.dependenteUnidade] || Object.values(FUNCIONARIOS.porUnidade).flat().filter((n,i,a)=>a.indexOf(n)===i).sort())]) +
       `</div></div>` : '') +
     `<div class="detail-section"><div class="detail-section-title">Módulo</div><div class="detail-grid">` +
       dRead('Módulo Atual', dVal('book')) +
@@ -1561,14 +1644,20 @@ function startEdit(td) {
     const names = depUnit
       ? (FUNCIONARIOS.porUnidade[depUnit] || [])
       : Object.values(FUNCIONARIOS.porUnidade).flat().filter((n,i,a) => a.indexOf(n)===i).sort();
-    input = document.createElement('select');
-    input.className = 'inline-select';
+    const dl = document.createElement('datalist');
+    dl.id = 'dl_depNome_' + row;
     ['', ...names].forEach(n => {
       const opt = document.createElement('option');
-      opt.value = n; opt.textContent = n || '—';
-      if (n === val) opt.selected = true;
-      input.appendChild(opt);
+      opt.value = n;
+      dl.appendChild(opt);
     });
+    input = document.createElement('input');
+    input.className = 'inline-input';
+    input.type = 'text';
+    input.value = val;
+    input.placeholder = 'Buscar…';
+    input.setAttribute('list', dl.id);
+    input._dl = dl;
   } else if (field === 'observacoes' || field === 'obsExtrasEmail') {
     input = document.createElement('textarea');
     input.className = 'inline-input';
@@ -1586,6 +1675,7 @@ function startEdit(td) {
 
   td.innerHTML = '';
   td.appendChild(input);
+  if (input._dl) td.appendChild(input._dl);
   input.focus();
   if (input.select) input.select();
 
@@ -1924,9 +2014,13 @@ function switchTab(tab) {
   document.getElementById('viewAlunos').style.display     = tab === 'alunos'     ? '' : 'none';
   document.getElementById('viewRelatorios').style.display = tab === 'relatorios' ? '' : 'none';
   document.getElementById('viewHistorico').style.display  = tab === 'historico'  ? '' : 'none';
+  document.getElementById('viewMotivos').style.display    = tab === 'motivos'    ? '' : 'none';
+  document.getElementById('viewLiberacoes').style.display = tab === 'liberacoes' ? '' : 'none';
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   if (tab === 'relatorios') { initRelatorios(); _syncFiltersToRelatorio(); }
   if (tab === 'historico')  { loadHistorico(); }
+  if (tab === 'motivos')    { loadMotivos(); }
+  if (tab === 'liberacoes') { loadLiberacoes(); }
 }
 
 function _syncFiltersToRelatorio() {
@@ -2388,6 +2482,233 @@ function renderHistorico(rows) {
   document.getElementById('histBody').innerHTML = tbody;
 }
 
+/* ── Liberações Temporárias ── */
+var _liberacoesData = [];
+
+function loadLiberacoes() {
+  document.getElementById('liberacoesBody').innerHTML =
+    '<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">⏳</div><p>Carregando…</p></div></td></tr>';
+  google.script.run
+    .withSuccessHandler(function(json) {
+      try {
+        var res = JSON.parse(json);
+        if (!res.ok) throw new Error(res.error || 'Erro');
+        _liberacoesData = res.grants;
+        renderLiberacoes();
+      } catch(e) {
+        document.getElementById('liberacoesBody').innerHTML =
+          '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--danger-500);font-size:.82rem">' + e.message + '</td></tr>';
+      }
+    })
+    .withFailureHandler(function(e) {
+      document.getElementById('liberacoesBody').innerHTML =
+        '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--danger-500);font-size:.82rem">' + (e.message || 'Falha') + '</td></tr>';
+    })
+    .getTempGrants(TOKEN);
+}
+
+function renderLiberacoes() {
+  if (!_liberacoesData.length) {
+    document.getElementById('liberacoesBody').innerHTML =
+      '<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🔓</div><p>Nenhuma liberação registrada.</p></div></td></tr>';
+    return;
+  }
+  var tbody = '';
+  _liberacoesData.forEach(function(g, i) {
+    var bg = i % 2 === 0 ? '#fff' : 'var(--gray-50)';
+    var badge = g.active
+      ? '<span style="background:var(--success-100);color:var(--success-600);border:1px solid var(--success-500);border-radius:20px;padding:3px 12px;font-size:.75rem;font-weight:700">Ativa</span>'
+      : '<span style="background:var(--gray-100);color:var(--gray-400);border:1px solid var(--gray-200);border-radius:20px;padding:3px 12px;font-size:.75rem;font-weight:700">Expirada</span>';
+    var actions = g.active
+      ? '<button onclick="openLibEmailModal(\'' + _ea(g.email) + '\')" title="Enviar e-mail" style="border:none;background:none;color:var(--navy-400);cursor:pointer;font-size:.88rem;padding:2px 6px">📧</button>' +
+        '<button onclick="revokeAccess(' + g.rowIndex + ')" title="Revogar" style="border:none;background:none;color:var(--danger-500);cursor:pointer;font-size:.88rem;padding:2px 6px">✕</button>'
+      : '';
+    tbody +=
+      '<tr style="background:' + bg + ';border-bottom:1px solid var(--gray-100)">' +
+        '<td style="padding:9px 14px;font-weight:600;color:var(--gray-700)">' + esc(g.email) + '</td>' +
+        '<td style="padding:9px 14px;color:var(--gray-500);font-size:.8rem">' + esc(g.grantedBy) + '</td>' +
+        '<td style="padding:9px 14px;color:var(--gray-500);font-size:.8rem;white-space:nowrap">' + esc(g.expiresAt) + '</td>' +
+        '<td style="padding:9px 14px;text-align:center">' + badge + '</td>' +
+        '<td style="padding:9px 14px;text-align:center;white-space:nowrap">' + actions + '</td>' +
+      '</tr>';
+  });
+  document.getElementById('liberacoesBody').innerHTML = tbody;
+}
+
+function grantAccess() {
+  var email = document.getElementById('libEmail').value.trim();
+  if (!email) { toast('Informe o e-mail.', false); return; }
+  google.script.run
+    .withSuccessHandler(function(res) {
+      var d = JSON.parse(res);
+      if (!d.ok) { toast('Erro: ' + d.error, false); return; }
+      document.getElementById('libEmail').value = '';
+      toast('Liberação de 24h concedida para ' + email + '.', true);
+      loadLiberacoes();
+    })
+    .withFailureHandler(function(e) { toast('Erro: ' + (e.message || e), false); })
+    .grantTempAccess(TOKEN, email);
+}
+
+function revokeAccess(rowIndex) {
+  if (!confirm('Revogar esta liberação agora?')) return;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      var d = JSON.parse(res);
+      if (!d.ok) { toast('Erro: ' + d.error, false); return; }
+      toast('Liberação revogada.', true);
+      loadLiberacoes();
+    })
+    .withFailureHandler(function(e) { toast('Erro: ' + (e.message || e), false); })
+    .revokeTempAccess(TOKEN, rowIndex);
+}
+
+function openLibEmailModal(email) {
+  document.getElementById('libEmailTo').value   = email;
+  document.getElementById('libEmailBody').value = '';
+  var el = document.getElementById('libEmailOverlay');
+  el.style.display = 'flex';
+}
+
+function closeLibEmailModal() {
+  document.getElementById('libEmailOverlay').style.display = 'none';
+}
+
+function sendLibEmail() {
+  var to   = document.getElementById('libEmailTo').value;
+  var body = document.getElementById('libEmailBody').value.trim();
+  if (!body) { toast('Digite a mensagem antes de enviar.', false); return; }
+  var btn = document.querySelector('#libEmailOverlay button:last-child');
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Enviar e-mail'; }
+      var d = JSON.parse(res);
+      if (!d.ok) { toast('Erro ao enviar: ' + d.error, false); return; }
+      closeLibEmailModal();
+      toast('E-mail enviado para ' + to + '.', true);
+    })
+    .withFailureHandler(function(e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Enviar e-mail'; }
+      toast('Erro: ' + (e.message || e), false);
+    })
+    .enviarEmailLiberacao(TOKEN, to, body);
+}
+
+/* ── Motivos de Desconto ── */
+var _motivosData = [];
+var _motivosCarregado = false;
+
+function loadMotivos() {
+  if (_motivosCarregado) return;
+  document.getElementById('motivosBody').innerHTML =
+    '<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">⏳</div><p>Carregando…</p></div></td></tr>';
+  google.script.run
+    .withSuccessHandler(function(json) {
+      try {
+        var res = JSON.parse(json);
+        if (!res.ok) throw new Error(res.error || 'Erro');
+        _motivosData = res.rows;
+        _motivosCarregado = true;
+        renderMotivos();
+      } catch(e) {
+        document.getElementById('motivosBody').innerHTML =
+          '<tr><td colspan="3" style="padding:24px;text-align:center;color:var(--danger-500);font-size:.82rem">' + e.message + '</td></tr>';
+      }
+    })
+    .withFailureHandler(function(e) {
+      document.getElementById('motivosBody').innerHTML =
+        '<tr><td colspan="3" style="padding:24px;text-align:center;color:var(--danger-500);font-size:.82rem">' + (e.message || 'Falha ao carregar') + '</td></tr>';
+    })
+    .getMotivosDesconto(TOKEN);
+}
+
+function renderMotivos() {
+  var tbody = '';
+  _motivosData.forEach(function(r, i) {
+    var bg = i % 2 === 0 ? '#fff' : 'var(--gray-50)';
+    var isAtivo = r.ativo === 'Sim';
+    var badgeStyle = isAtivo
+      ? 'background:var(--success-100);color:var(--success-600);border:1px solid var(--success-500)'
+      : 'background:var(--danger-100);color:var(--danger-600);border:1px solid var(--danger-500)';
+    tbody +=
+      '<tr style="background:' + bg + ';border-bottom:1px solid var(--gray-100)">' +
+        '<td style="padding:8px 14px">' +
+          '<input type="text" value="' + _ea(r.motivo) + '" ' +
+            'style="width:100%;border:1px solid transparent;border-radius:4px;padding:4px 8px;font-size:.85rem;background:transparent;color:var(--gray-700);outline:none" ' +
+            'onfocus="this.style.borderColor=\'var(--navy-300)\';this.style.background=\'#fff\'" ' +
+            'onblur="this.style.borderColor=\'transparent\';this.style.background=\'transparent\';saveMotivoField(' + r.rowIndex + ',\'motivo\',this.value,\'' + _ea(r.motivo) + '\')">' +
+        '</td>' +
+        '<td style="padding:8px 14px;text-align:center">' +
+          '<button onclick="toggleMotivoAtivo(' + r.rowIndex + ')" title="Clique para alternar" ' +
+            'style="' + badgeStyle + ';border-radius:20px;padding:4px 18px;font-size:.8rem;font-weight:700;cursor:pointer;min-width:64px">' +
+            (isAtivo ? 'Sim' : 'Não') +
+          '</button>' +
+        '</td>' +
+        '<td style="padding:8px 14px;text-align:center">' +
+          '<button onclick="deleteMotivoRow(' + r.rowIndex + ',this)" title="Excluir" ' +
+            'style="border:none;background:none;color:var(--danger-500);cursor:pointer;font-size:.9rem;padding:2px 6px">🗑️</button>' +
+        '</td>' +
+      '</tr>';
+  });
+  if (!tbody) {
+    tbody = '<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">📋</div><p>Nenhum motivo cadastrado ainda.</p></div></td></tr>';
+  }
+  document.getElementById('motivosBody').innerHTML = tbody;
+}
+
+function saveMotivoField(rowIndex, field, newVal, oldVal) {
+  if (oldVal !== undefined && String(newVal) === String(oldVal)) return;
+  var idx = _motivosData.findIndex(function(r) { return r.rowIndex === rowIndex; });
+  google.script.run
+    .withSuccessHandler(function(res) {
+      var d = JSON.parse(res);
+      if (!d.ok) { toast('Erro ao salvar: ' + d.error, false); return; }
+      if (idx >= 0) _motivosData[idx][field] = newVal;
+      toast('Salvo!', true);
+    })
+    .withFailureHandler(function(e) { toast('Erro: ' + (e.message || e), false); })
+    .updateMotivoDesconto(TOKEN, rowIndex, field, newVal);
+}
+
+function toggleMotivoAtivo(rowIndex) {
+  var idx = _motivosData.findIndex(function(r) { return r.rowIndex === rowIndex; });
+  if (idx < 0) return;
+  var newVal = _motivosData[idx].ativo === 'Sim' ? 'Não' : 'Sim';
+  _motivosData[idx].ativo = newVal;
+  renderMotivos();
+  saveMotivoField(rowIndex, 'ativo', newVal);
+}
+
+function addMotivoRow() {
+  var motivo = prompt('Nome do novo motivo de desconto:');
+  if (!motivo || !motivo.trim()) return;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      var d = JSON.parse(res);
+      if (!d.ok) { toast('Erro: ' + d.error, false); return; }
+      _motivosData.push({ rowIndex: d.rowIndex, motivo: motivo.trim(), ativo: 'Sim' });
+      renderMotivos();
+      toast('Motivo adicionado!', true);
+    })
+    .withFailureHandler(function(e) { toast('Erro: ' + (e.message || e), false); })
+    .addMotivoDesconto(TOKEN, motivo.trim());
+}
+
+function deleteMotivoRow(rowIndex, btn) {
+  if (!confirm('Excluir este motivo de desconto?')) return;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      var d = JSON.parse(res);
+      if (!d.ok) { toast('Erro: ' + d.error, false); return; }
+      _motivosData = _motivosData.filter(function(r) { return r.rowIndex !== rowIndex; });
+      renderMotivos();
+      toast('Motivo excluído.', true);
+    })
+    .withFailureHandler(function(e) { toast('Erro: ' + (e.message || e), false); })
+    .deleteMotivoDesconto(TOKEN, rowIndex);
+}
+
 /* ── PDFs Gerados ── */
 var _pdfsGeradosData = [];
 var _mergeEmailEntry = null;
@@ -2420,9 +2741,9 @@ function renderPDFsGerados(rows) {
   if (busca) busca.value = '';
   var _MESES_ORD = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   var anosSet = {}, mesesSet = {};
-  rows.forEach(function(r) { if (r.ano) anosSet[r.ano] = 1; if (r.mes) mesesSet[r.mes] = 1; });
+  rows.forEach(function(r) { if (r.ano) anosSet[r.ano] = 1; if (r.mes) mesesSet[normMesKey(r.mes)] = 1; });
   var anos  = Object.keys(anosSet).sort().reverse();
-  var meses = _MESES_ORD.filter(function(m) { return mesesSet[m]; });
+  var meses = _MESES_ORD.filter(function(m) { return mesesSet[normMesKey(m)]; });
   buildMS('msPdfsAno',  anos,  'filterPDFsGerados');
   buildMS('msPdfsMes',  meses, 'filterPDFsGerados');
   filterPDFsGerados();
@@ -2445,11 +2766,12 @@ function filterPDFsGerados() {
     return;
   }
 
-  var selAnos  = getMS('msPdfsAno');
-  var selMeses = getMS('msPdfsMes');
+  var selAnos      = getMS('msPdfsAno');
+  var selMeses     = getMS('msPdfsMes');
+  var selMesesNorm = selMeses.map(normMesKey);
   var data = _pdfsGeradosData.filter(function(r) {
-    if (selAnos.length  && selAnos.indexOf(r.ano)  === -1) return false;
-    if (selMeses.length && selMeses.indexOf(r.mes) === -1) return false;
+    if (selAnos.length      && selAnos.indexOf(r.ano)                      === -1) return false;
+    if (selMesesNorm.length && selMesesNorm.indexOf(normMesKey(r.mes))     === -1) return false;
     if (q) {
       var haystack = normStr(r.titulo) + ' ' + normStr(r.origemBolsa) + ' ' + normStr(r.mes) + ' ' + normStr(r.ano);
       if (haystack.indexOf(q) === -1) return false;
@@ -2472,13 +2794,14 @@ function filterPDFsGerados() {
       ? '<span style="flex-shrink:0;font-size:.63rem;padding:2px 7px;border-radius:10px;background:var(--navy-100);color:var(--navy-700);font-weight:700;letter-spacing:.03em">UNIDO</span>'
       : '<span style="flex-shrink:0;font-size:.63rem;padding:2px 7px;border-radius:10px;background:var(--gray-200);color:var(--gray-600);font-weight:700;letter-spacing:.03em">PDF</span>';
     var periodo = [r.mes, r.ano].filter(Boolean).join(' ');
-    var emailBtn = '';
+    var emailBtn = '', delBtn = '';
     if (USER && USER.canSendEmail) {
       if (r.tipo === 'individual' && r.chavePDF) {
         emailBtn = '<button onclick="openEmailModalFromLog(' + origIdx + ',this)" style="flex-shrink:0;padding:4px 10px;font-size:.73rem;border:1px solid var(--navy-200);border-radius:4px;background:white;color:var(--navy-600);cursor:pointer;font-weight:600">📧 Enviar</button>';
       } else {
         emailBtn = '<button onclick="openMergeEmailModal(' + origIdx + ')" style="flex-shrink:0;padding:4px 10px;font-size:.73rem;border:1px solid var(--navy-200);border-radius:4px;background:white;color:var(--navy-600);cursor:pointer;font-weight:600">📧 Enviar</button>';
       }
+      delBtn = '<button onclick="deletePDFGerado(' + origIdx + ')" style="flex-shrink:0;padding:4px 8px;font-size:.73rem;border:1px solid var(--danger-100);border-radius:4px;background:white;color:var(--danger-500);cursor:pointer;font-weight:600" title="Excluir do Drive e do histórico">🗑️</button>';
     }
     html +=
       '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;background:' + bg + ';border-bottom:1px solid var(--gray-100);min-width:0">' +
@@ -2488,6 +2811,7 @@ function filterPDFsGerados() {
         '<span style="flex-shrink:0;font-size:.7rem;color:var(--gray-300);white-space:nowrap">' + esc(r.ts) + '</span>' +
         '<a href="' + esc(r.viewUrl) + '" target="_blank" style="flex-shrink:0;padding:4px 10px;font-size:.73rem;border:1px solid var(--gray-200);border-radius:4px;background:white;color:var(--gray-600);text-decoration:none;font-weight:600;white-space:nowrap">📂 Drive</a>' +
         emailBtn +
+        delBtn +
       '</div>';
   });
   listEl.innerHTML = html;
@@ -2507,6 +2831,21 @@ function openEmailModalFromLog(idx, btn) {
   if (!entry) return;
   _currentPDFFiles[entry.chavePDF] = { fileId: entry.fileId, viewUrl: entry.viewUrl };
   openEmailModal(entry.chavePDF, btn);
+}
+
+function deletePDFGerado(idx) {
+  var entry = _pdfsGeradosData[idx];
+  if (!entry) return;
+  if (!confirm('Excluir "' + (entry.titulo || entry.origemBolsa) + '"?\n\nIsso remove o arquivo do Drive e o registro do histórico.')) return;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      var d = JSON.parse(res);
+      if (!d.ok) { toast('Erro ao excluir: ' + d.error, false); return; }
+      toast('PDF excluído.', true);
+      loadPDFsGerados();
+    })
+    .withFailureHandler(function(e) { toast('Erro: ' + (e.message || e), false); })
+    .deletePDFGerado(TOKEN, entry.fileId);
 }
 
 function openMergeEmailModal(idx) {

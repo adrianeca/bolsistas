@@ -77,6 +77,8 @@ function _getUser(token) {
       canViewAlunos:     access.canViewAlunos,
       canViewRelatorios: access.canViewRelatorios,
       canViewHistorico:  access.canViewHistorico,
+      canViewMotivos:    access.canViewMotivos,
+      canViewLiberacoes: access.canViewLiberacoes,
     };
 
     try { cache.put(cacheKey, JSON.stringify(userObj), 600); } catch(e) {}
@@ -118,9 +120,11 @@ function _hasAccess(ss, role, email) {
     const canViewAlunos      = hasFull || acessos.includes('bolsistas_alunos');
     const canViewRelatorios  = hasFull || acessos.includes('bolsistas_relatorios');
     const canViewHistorico   = hasFull || acessos.includes('bolsistas_historico');
+    const canViewMotivos     = hasFull || acessos.includes('bolsistas_motivos');
+    const canViewLiberacoes  = hasFull || acessos.includes('bolsistas_liberacao');
 
-    if (!canViewAlunos && !canViewRelatorios) return null;
-    return { canViewAlunos, canViewRelatorios, canViewHistorico };
+    if (!canViewAlunos && !canViewRelatorios && !canViewMotivos && !canViewLiberacoes) return null;
+    return { canViewAlunos, canViewRelatorios, canViewHistorico, canViewMotivos, canViewLiberacoes };
   }
 
   return null;
@@ -262,7 +266,7 @@ function initApp(token) {
       });
     }
 
-    const isEditLocked = !LOCK_EXEMPT_ROLES.includes(user.role) && _isPastFifthBusinessDay();
+    const isEditLocked = !LOCK_EXEMPT_ROLES.includes(user.role) && _isPastFifthBusinessDay() && !_hasTempGrant(user.email);
 
     const result = JSON.stringify({
       ok:       true,
@@ -422,7 +426,7 @@ function updateBolsista(token, payloadJson) {
     const user = _getUser(token);
     if (!user.canEdit) throw new Error('Sem permissão para editar.');
 
-    if (!LOCK_EXEMPT_ROLES.includes(user.role) && _isPastFifthBusinessDay()) {
+    if (!LOCK_EXEMPT_ROLES.includes(user.role) && _isPastFifthBusinessDay() && !_hasTempGrant(user.email)) {
       throw new Error('Edição bloqueada após o 5º dia útil do mês.');
     }
 
@@ -1343,6 +1347,79 @@ function enviarEmail(token, payloadJson) {
   }
 }
 
+// ─── Motivos de Desconto ─────────────────────────────────────
+function getMotivosDesconto(token) {
+  try {
+    const user = _getUser(token);
+    if (!user.canViewMotivos) throw new Error('Sem permissão.');
+    const ss = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+    const sh = ss.getSheetByName('tab_auxiliar');
+    if (!sh) return JSON.stringify({ ok: false, error: 'Aba tab_auxiliar não encontrada.' });
+    const data = sh.getDataRange().getValues();
+    const rows = [];
+    for (let i = 1; i < data.length; i++) {
+      const motivo = String(data[i][6] || '').trim(); // col G
+      if (!motivo) continue;
+      rows.push({ rowIndex: i + 1, motivo, ativo: String(data[i][7] || '').trim() }); // col H
+    }
+    return JSON.stringify({ ok: true, rows });
+  } catch(e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
+}
+
+function updateMotivoDesconto(token, rowIndex, field, value) {
+  try {
+    const user = _getUser(token);
+    if (!user.canViewMotivos) throw new Error('Sem permissão.');
+    const ss = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+    const sh = ss.getSheetByName('tab_auxiliar');
+    if (!sh) throw new Error('Aba tab_auxiliar não encontrada.');
+    const col = field === 'motivo' ? 7 : field === 'ativo' ? 8 : null;
+    if (!col) throw new Error('Campo inválido.');
+    sh.getRange(rowIndex, col).setValue(value);
+    return JSON.stringify({ ok: true });
+  } catch(e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
+}
+
+function addMotivoDesconto(token, motivo) {
+  try {
+    const user = _getUser(token);
+    if (!user.canViewMotivos) throw new Error('Sem permissão.');
+    if (!motivo || !String(motivo).trim()) throw new Error('Motivo não pode ser vazio.');
+    const ss = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+    const sh = ss.getSheetByName('tab_auxiliar');
+    if (!sh) throw new Error('Aba tab_auxiliar não encontrada.');
+    const data = sh.getDataRange().getValues();
+    let lastGRow = 1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][6] || '').trim()) lastGRow = i + 1;
+    }
+    const newRow = lastGRow + 1;
+    sh.getRange(newRow, 7).setValue(String(motivo).trim());
+    sh.getRange(newRow, 8).setValue('Sim');
+    return JSON.stringify({ ok: true, rowIndex: newRow });
+  } catch(e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
+}
+
+function deleteMotivoDesconto(token, rowIndex) {
+  try {
+    const user = _getUser(token);
+    if (!user.canViewMotivos) throw new Error('Sem permissão.');
+    const ss = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+    const sh = ss.getSheetByName('tab_auxiliar');
+    if (!sh) throw new Error('Aba tab_auxiliar não encontrada.');
+    sh.getRange(rowIndex, 7, 1, 2).clearContent(); // limpa cols G e H sem apagar outras colunas
+    return JSON.stringify({ ok: true });
+  } catch(e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
+}
+
 // ─── PDFs Gerados ────────────────────────────────────────────
 function getPDFsGerados(token) {
   try {
@@ -1375,6 +1452,33 @@ function getPDFsGerados(token) {
     }
     rows.reverse();
     return JSON.stringify({ ok: true, rows });
+  } catch(e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
+}
+
+// ─── Exclusão de PDF gerado ──────────────────────────────────
+function deletePDFGerado(token, fileId) {
+  try {
+    const user = _getUser(token);
+    if (!user.canSendEmail) throw new Error('Sem permissão.');
+    if (!fileId) throw new Error('fileId não informado.');
+
+    try { DriveApp.getFileById(fileId).setTrashed(true); } catch(e) { /* arquivo já excluído */ }
+
+    const ss  = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+    const log = ss.getSheetByName('log_pdfs');
+    if (log) {
+      const data = log.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][7] || '') === fileId) {
+          log.deleteRow(i + 1);
+          break;
+        }
+      }
+    }
+
+    return JSON.stringify({ ok: true });
   } catch(e) {
     return JSON.stringify({ ok: false, error: e.message });
   }
@@ -1451,6 +1555,122 @@ function _buildEmailHtml(origemBolsa, mes, ano, obsExtra, logoSrc) {
 
   </div>
 </body></html>`;
+}
+
+// ─── Liberações temporárias de edição ────────────────────────
+function _hasTempGrant(email) {
+  try {
+    const ss   = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+    const sh   = ss.getSheetByName('temp_grants');
+    if (!sh) return false;
+    const now  = new Date();
+    const norm = s => String(s || '').trim().toLowerCase();
+    const data = sh.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (norm(data[i][0]) !== norm(email)) continue;
+      const exp = data[i][3] instanceof Date ? data[i][3] : new Date(data[i][3]);
+      if (!isNaN(exp) && exp > now) return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+function getTempGrants(token) {
+  try {
+    const user = _getUser(token);
+    if (!user.canViewLiberacoes) throw new Error('Sem permissão.');
+    const ss   = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+    const sh   = ss.getSheetByName('temp_grants');
+    if (!sh) return JSON.stringify({ ok: true, grants: [] });
+    const now  = new Date();
+    const tz   = Session.getScriptTimeZone();
+    const data = sh.getDataRange().getValues();
+    const grants = [];
+    for (let i = 1; i < data.length; i++) {
+      if (!data[i][0]) continue;
+      const exp = data[i][3] instanceof Date ? data[i][3] : new Date(data[i][3]);
+      grants.push({
+        rowIndex:  i + 1,
+        email:     String(data[i][0] || ''),
+        grantedBy: String(data[i][1] || ''),
+        grantedAt: data[i][2] instanceof Date ? Utilities.formatDate(data[i][2], tz, 'dd/MM/yyyy HH:mm') : String(data[i][2] || ''),
+        expiresAt: (!isNaN(exp) && exp instanceof Date) ? Utilities.formatDate(exp, tz, 'dd/MM/yyyy HH:mm') : String(data[i][3] || ''),
+        active:    !isNaN(exp) && exp > now,
+      });
+    }
+    grants.sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0));
+    return JSON.stringify({ ok: true, grants });
+  } catch(e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
+}
+
+function grantTempAccess(token, targetEmail) {
+  try {
+    const user = _getUser(token);
+    if (!user.canViewLiberacoes) throw new Error('Sem permissão.');
+    if (!targetEmail || !String(targetEmail).trim()) throw new Error('E-mail não informado.');
+
+    const ss  = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+    let sh    = ss.getSheetByName('temp_grants');
+    if (!sh) {
+      sh = ss.insertSheet('temp_grants');
+      sh.appendRow(['Email', 'LiberadoPor', 'LiberadoEm', 'ExpiraEm']);
+      sh.setFrozenRows(1);
+    }
+
+    const now     = new Date();
+    const expires = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const norm    = s => String(s || '').trim().toLowerCase();
+    const data    = sh.getDataRange().getValues();
+
+    for (let i = 1; i < data.length; i++) {
+      if (norm(data[i][0]) === norm(targetEmail)) {
+        sh.getRange(i + 1, 2).setValue(user.email);
+        sh.getRange(i + 1, 3).setValue(now);
+        sh.getRange(i + 1, 4).setValue(expires);
+        return JSON.stringify({ ok: true });
+      }
+    }
+
+    sh.appendRow([norm(targetEmail), user.email, now, expires]);
+    return JSON.stringify({ ok: true });
+  } catch(e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
+}
+
+function revokeTempAccess(token, rowIndex) {
+  try {
+    const user = _getUser(token);
+    if (!user.canViewLiberacoes) throw new Error('Sem permissão.');
+    const ss = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+    const sh = ss.getSheetByName('temp_grants');
+    if (!sh) throw new Error('Nenhuma liberação encontrada.');
+    sh.getRange(rowIndex, 4).setValue(new Date()); // expira agora
+    return JSON.stringify({ ok: true });
+  } catch(e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
+}
+
+function enviarEmailLiberacao(token, toEmail, body) {
+  try {
+    const user = _getUser(token);
+    if (!user.canViewLiberacoes) throw new Error('Sem permissão.');
+    if (!toEmail) throw new Error('Destinatário não informado.');
+    const subject = 'Liberação App de Bolsistas para edição';
+    GmailApp.sendEmail(toEmail, subject, '', {
+      htmlBody: '<p style="font-family:sans-serif;font-size:14px;color:#334155;line-height:1.65">' +
+                (body || '').replace(/\n/g, '<br>') + '</p>',
+      name:    'Administrativo BRASAS',
+      replyTo: 'administrativo@brasas.com',
+      cc:      'administrativo@brasas.com',
+    });
+    return JSON.stringify({ ok: true });
+  } catch(e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
 }
 
 // ─── Bloqueio após 5º dia útil ───────────────────────────────
