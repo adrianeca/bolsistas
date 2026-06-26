@@ -559,26 +559,26 @@ td.editable.saving{opacity:.6;pointer-events:none}
         <table id="dataTable">
           <thead>
             <tr>
-              <th class="sortable" data-sort="nome" onclick="sortBy(this.dataset.sort)" style="min-width:160px">Nome do Aluno</th>
+              <th class="sortable" data-sort="nome" onclick="sortBy(this.dataset.sort)" style="min-width:160px">Nome</th>
               <th class="sortable" data-sort="unidade" onclick="sortBy(this.dataset.sort)">Unidade</th>
               <th class="sortable editable-col" data-sort="statusAluno" onclick="sortBy(this.dataset.sort)">Status</th>
               <th class="sortable" data-sort="mes" onclick="sortBy(this.dataset.sort)">Mês</th>
               <th class="sortable" data-sort="ano" onclick="sortBy(this.dataset.sort)">Ano</th>
-              <th class="sortable" data-sort="percentual" onclick="sortBy(this.dataset.sort)">% Bolsa</th>
+              <th class="sortable" data-sort="percentual" onclick="sortBy(this.dataset.sort)">Percentual bolsa</th>
               <th class="sortable" data-sort="origemBolsa" onclick="sortBy(this.dataset.sort)">Origem da Bolsa</th>
-              <th class="sortable editable-col" data-sort="data1aAula" onclick="sortBy(this.dataset.sort)">Data 1ª Aula</th>
+              <th class="sortable editable-col" data-sort="data1aAula" onclick="sortBy(this.dataset.sort)">Data 1ª aula no BRASAS</th>
               <th class="sortable" data-sort="book" onclick="sortBy(this.dataset.sort)">Módulo</th>
               <th class="sortable editable-col" data-sort="dataInicioBook" onclick="sortBy(this.dataset.sort)">Início do Módulo</th>
               <th class="sortable editable-col" data-sort="frequencia" onclick="sortBy(this.dataset.sort)">Frequência</th>
               <th class="sortable editable-col" data-sort="horario" onclick="sortBy(this.dataset.sort)">Horário</th>
               <th class="sortable editable-col" data-sort="diasAula" onclick="sortBy(this.dataset.sort)">Dias de Aula</th>
-              <th class="sortable" data-sort="dataPrevConclusao" onclick="sortBy(this.dataset.sort)">Prev. Conclusão</th>
+              <th class="sortable" data-sort="dataPrevConclusao" onclick="sortBy(this.dataset.sort)">Prev. conclusão módulo</th>
               <th class="sortable editable-col" data-sort="diasPrevistos" onclick="sortBy(this.dataset.sort)">Aulas Prev.</th>
               <th class="sortable editable-col" data-sort="diasAssistidos" onclick="sortBy(this.dataset.sort)">Aulas Assist.</th>
-              <th class="sortable" data-sort="_faltadosMes" onclick="sortBy(this.dataset.sort)">Faltas/Mês</th>
-              <th class="sortable" data-sort="_faltados" onclick="sortBy(this.dataset.sort)">Faltas/Módulo</th>
-              <th class="sortable" data-sort="_pctFaltadosLivro" onclick="sortBy(this.dataset.sort)">% Faltas/Módulo</th>
-              <th class="sortable" data-sort="valor" onclick="sortBy(this.dataset.sort)">Valor</th>
+              <th class="sortable" data-sort="_faltadosMes" onclick="sortBy(this.dataset.sort)">Faltas no mês</th>
+              <th class="sortable" data-sort="_faltados" onclick="sortBy(this.dataset.sort)">Faltas no módulo</th>
+              <th class="sortable" data-sort="_pctFaltadosLivro" onclick="sortBy(this.dataset.sort)">Percentual Faltas no módulo</th>
+              <th class="sortable" data-sort="valor" onclick="sortBy(this.dataset.sort)">Mensalidade BRASAS</th>
               <th class="sortable editable-col" data-sort="teste1" onclick="sortBy(this.dataset.sort)">Teste 1</th>
               <th class="sortable editable-col" data-sort="teste2" onclick="sortBy(this.dataset.sort)">Teste 2</th>
               <th class="sortable editable-col" data-sort="mt" onclick="sortBy(this.dataset.sort)">MT</th>
@@ -588,8 +588,8 @@ td.editable.saving{opacity:.6;pointer-events:none}
               <th class="sortable" data-sort="_nota" onclick="sortBy(this.dataset.sort)">Média Final</th>
               <th class="sortable editable-col" data-sort="_aprovAjustado" onclick="sortBy(this.dataset.sort)">Conceito</th>
               <th class="sortable editable-col" data-sort="observacoes" onclick="sortBy(this.dataset.sort)">Observações</th>
-              <th class="sortable editable-col" data-sort="dependenteUnidade" onclick="sortBy(this.dataset.sort)">Dep. Unidade</th>
-              <th class="sortable editable-col" data-sort="dependenteNome" onclick="sortBy(this.dataset.sort)">Dep. Nome</th>
+              <th class="sortable editable-col" data-sort="dependenteUnidade" onclick="sortBy(this.dataset.sort)">Unidade Funcionário BRASAS</th>
+              <th class="sortable editable-col" data-sort="dependenteNome" onclick="sortBy(this.dataset.sort)">Nome Funcionário BRASAS</th>
             </tr>
           </thead>
           <tbody id="tableBody">
@@ -2211,11 +2211,11 @@ function openPreview(chavePDF) {
     '<table style="border-collapse:collapse;width:100%;font-size:.63rem">';
 
   const cols = [
-    {l:'Aluno',w:'120px',left:true},{l:'Unidade',w:'52px'},{l:'%',w:'32px'},
-    {l:'Módulo',w:'50px'},{l:'Freq./Horário',w:'85px'},
-    {l:'Início Módulo',w:'62px'},{l:'Prev. Conclusão',w:'62px'},
+    {l:'Nome',w:'120px',left:true},{l:'Unidade',w:'52px'},{l:'%',w:'32px'},
+    {l:'Módulo',w:'50px'},{l:'Freq./Hor./Dias',w:'85px'},
+    {l:'Início Módulo',w:'62px'},{l:'Prev. conclusão módulo',w:'62px'},
     {l:'Prev.',w:'36px'},{l:'Assist.',w:'36px'},{l:'Faltas',w:'36px'},
-    {l:'Valor',w:'52px'},
+    {l:'Mensalidade BRASAS',w:'52px'},
     {l:'T1',w:'28px'},{l:'T2',w:'28px'},
     {l:'MT',w:'28px'},{l:'WT',w:'28px'},{l:'OC',w:'28px'},{l:'OT',w:'28px'},
     {l:'Média',w:'42px'},{l:'Conceito',w:'46px'},{l:'Observações',w:'100px',left:true},
