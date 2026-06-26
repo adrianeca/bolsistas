@@ -134,6 +134,9 @@ body{font-family:var(--font);background:var(--gray-100);color:var(--gray-700);mi
 }
 .ms-option:hover{background:var(--gray-50)}
 .ms-option input[type=checkbox]{accent-color:var(--navy-600);cursor:pointer;flex-shrink:0}
+.ms-search{padding:6px 8px;border-bottom:1px solid var(--gray-200);position:sticky;top:0;background:#fff;z-index:1}
+.ms-search input{width:100%;border:1px solid var(--gray-200);border-radius:5px;padding:5px 8px;font-size:.8rem;font-family:var(--font);outline:none;color:var(--gray-700)}
+.ms-search input:focus{border-color:var(--navy-400)}
 
 /* Tab navigation */
 .tab-bar{background:var(--navy-900);border-bottom:1px solid rgba(255,255,255,.07);padding:0 32px;display:flex;position:sticky;top:60px;z-index:99}
@@ -519,6 +522,13 @@ td.editable.saving{opacity:.6;pointer-events:none}
         </div>
       </div>
       <div class="filter-group">
+        <label class="filter-label">Nome Funcionário BRASAS</label>
+        <div class="multi-select" id="msFuncionario" data-placeholder="Todos" style="min-width:200px">
+          <div class="ms-trigger" onclick="toggleMS('msFuncionario')"><span class="ms-label">Todos</span><span class="ms-arrow">▾</span></div>
+          <div class="ms-panel"></div>
+        </div>
+      </div>
+      <div class="filter-group">
         <label class="filter-label">Buscar aluno / turma</label>
         <input class="filter-input" id="fBusca" type="text" placeholder="Nome ou turma…" oninput="applyFilters()">
       </div>
@@ -636,6 +646,16 @@ td.editable.saving{opacity:.6;pointer-events:none}
         </div>
       </div>
       <div class="filter-group">
+        <label class="filter-label">Status</label>
+        <select class="filter-select" id="rStatus" onchange="buildRelatorios()" style="min-width:140px">
+          <option value="">Todos</option>
+          <option value="Vigente">Vigente</option>
+          <option value="Transferido">Transferido</option>
+          <option value="Teste Incompleto">Teste Incompleto</option>
+          <option value="Cancelado">Cancelado</option>
+        </select>
+      </div>
+      <div class="filter-group">
         <label class="filter-label">Aluno</label>
         <input type="text" class="filter-select" id="rAluno" placeholder="Buscar nome…" oninput="buildRelatorios()" style="min-width:160px">
       </div>
@@ -685,6 +705,23 @@ td.editable.saving{opacity:.6;pointer-events:none}
           <input type="text" id="pdfsBusca" placeholder="Buscar PDF…" oninput="filterPDFsGerados()" style="margin-left:12px;max-width:230px;border:1px solid var(--gray-200);border-radius:6px;padding:4px 10px;font-size:.78rem;color:var(--gray-700);outline:none" onfocus="this.style.borderColor='var(--navy-400)'" onblur="this.style.borderColor='var(--gray-200)'">
           <span class="table-header-count" id="pdfsGeradosCount" style="margin-left:8px"></span>
           <button onclick="loadPDFsGerados()" title="Recarregar" style="margin-left:auto;background:transparent;border:1px solid var(--gray-200);border-radius:6px;padding:4px 10px;font-size:.78rem;color:var(--gray-500);cursor:pointer">↺ Atualizar</button>
+        </div>
+        <div style="padding:8px 14px;border-bottom:1px solid var(--gray-200);background:var(--gray-50);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div class="filter-group" style="margin:0">
+            <label class="filter-label">Ano</label>
+            <div class="multi-select" id="msPdfsAno" data-placeholder="Todos">
+              <div class="ms-trigger" onclick="toggleMS('msPdfsAno')"><span class="ms-label">Todos</span><span class="ms-arrow">▾</span></div>
+              <div class="ms-panel"></div>
+            </div>
+          </div>
+          <div class="filter-group" style="margin:0">
+            <label class="filter-label">Mês</label>
+            <div class="multi-select" id="msPdfsMes" data-placeholder="Todos">
+              <div class="ms-trigger" onclick="toggleMS('msPdfsMes')"><span class="ms-label">Todos</span><span class="ms-arrow">▾</span></div>
+              <div class="ms-panel"></div>
+            </div>
+          </div>
+          <button class="filter-clear" onclick="clearPdfsFilters()">Limpar</button>
         </div>
         <div id="pdfsGeradosList">
           <div style="padding:20px 16px;text-align:center;color:var(--gray-400);font-size:.82rem">Carregando…</div>
@@ -926,10 +963,12 @@ function onAppData(jsonStr) {
   buildMS('msAno',     res.anos);
   buildMS('msMes',     [...(res.meses||[])].sort((a,b)=>(MES_ORDER[normMesKey(a)]||99)-(MES_ORDER[normMesKey(b)]||99)));
   buildMS('msUnidade', res.unidades);
-  buildMS('msOrigem',  res.origens);
+  buildMS('msOrigem',  res.origens, 'applyFilters', { searchable: true });
 
   FERIADOS     = new Set(res.feriados || []);
   FUNCIONARIOS = res.funcionarios || { unidades: [], porUnidade: {} };
+  const allFuncs = Object.values(FUNCIONARIOS.porUnidade).flat().filter((n,i,a) => n && a.indexOf(n)===i).sort();
+  buildMS('msFuncionario', allFuncs, 'applyFilters', { searchable: true });
 
   if (res.isEditLocked && USER) USER.canEdit = false;
   FULL_ROWS    = res.rows;
@@ -967,17 +1006,32 @@ function showError(msg) {
 function toggleMS(id) {
   const el     = document.getElementById(id);
   const isOpen = el.classList.contains('open');
-  document.querySelectorAll('.multi-select.open').forEach(ms => ms.classList.remove('open'));
+  document.querySelectorAll('.multi-select.open').forEach(ms => {
+    ms.classList.remove('open');
+    const si = ms.querySelector('.ms-search input');
+    if (si) { si.value = ''; filterMSOptions(ms.id, ''); }
+  });
   if (!isOpen) el.classList.add('open');
 }
 
-function buildMS(id, values, onChangeFn) {
-  const fn    = onChangeFn || 'applyFilters';
-  const panel = document.querySelector(`#${id} .ms-panel`);
-  panel.innerHTML = (values || []).map(v =>
+function buildMS(id, values, onChangeFn, opts) {
+  const fn       = onChangeFn || 'applyFilters';
+  const panel    = document.querySelector(`#${id} .ms-panel`);
+  const optHtml  = (values || []).map(v =>
     `<label class="ms-option"><input type="checkbox" value="${_ea(v)}" onchange="updateMSLabel('${id}');${fn}()">${esc(v)}</label>`
   ).join('');
+  panel.innerHTML = (opts && opts.searchable
+    ? `<div class="ms-search"><input type="text" placeholder="Buscar…" oninput="filterMSOptions('${id}',this.value)" onclick="event.stopPropagation()" autocomplete="off"></div>`
+    : '') + optHtml;
   updateMSLabel(id);
+}
+
+function filterMSOptions(id, q) {
+  const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const nq   = norm(q);
+  document.querySelectorAll(`#${id} .ms-option`).forEach(label => {
+    label.style.display = !nq || norm(label.textContent).includes(nq) ? '' : 'none';
+  });
 }
 
 function getMS(id) {
@@ -1005,7 +1059,11 @@ function updateMSLabel(id) {
 
 document.addEventListener('click', e => {
   if (!e.target.closest('.multi-select')) {
-    document.querySelectorAll('.multi-select.open').forEach(ms => ms.classList.remove('open'));
+    document.querySelectorAll('.multi-select.open').forEach(ms => {
+      ms.classList.remove('open');
+      const si = ms.querySelector('.ms-search input');
+      if (si) { si.value = ''; filterMSOptions(ms.id, ''); }
+    });
   }
 });
 
@@ -1016,8 +1074,9 @@ function applyFilters() {
   const mes         = getMS('msMes');
   const ano         = getMS('msAno');
   const unidade     = getMS('msUnidade');
-  const origemBolsa = getMS('msOrigem');
-  const busca       = document.getElementById('fBusca').value.trim();
+  const origemBolsa  = getMS('msOrigem');
+  const funcionario  = getMS('msFuncionario');
+  const busca        = document.getElementById('fBusca').value.trim();
   const pctMin      = parseInt(document.getElementById('fPctFaltas').value || '0') || 0;
   const editFilter  = document.getElementById('fEditado').value;
   const buscaN      = norm(busca);
@@ -1026,7 +1085,8 @@ function applyFilters() {
     if (!inArr(r.mes,         mes))         return false;
     if (!inArr(r.ano,         ano))         return false;
     if (!inArr(r.unidade,     unidade))     return false;
-    if (!inArr(r.origemBolsa, origemBolsa)) return false;
+    if (!inArr(r.origemBolsa,   origemBolsa))  return false;
+    if (!inArr(r.dependenteNome, funcionario)) return false;
     if (busca && !norm(r.nome).includes(buscaN) && !norm(r.turma).includes(buscaN)) return false;
     if (pctMin > 0 && !(r._pctFaltadosLivro !== '' && Number(r._pctFaltadosLivro) > pctMin)) return false;
     if (editFilter === 'sim' && !r.editadoWebapp) return false;
@@ -1038,7 +1098,7 @@ function applyFilters() {
 }
 
 function clearFilters() {
-  ['msAno','msMes','msUnidade','msOrigem'].forEach(id => {
+  ['msAno','msMes','msUnidade','msOrigem','msFuncionario'].forEach(id => {
     document.querySelectorAll(`#${id} .ms-panel input`).forEach(cb => cb.checked = false);
     updateMSLabel(id);
   });
@@ -1054,6 +1114,7 @@ function clearRelFilters() {
     document.querySelectorAll('#' + id + ' .ms-panel input').forEach(function(cb) { cb.checked = false; });
     updateMSLabel(id);
   });
+  document.getElementById('rStatus').value = '';
   document.getElementById('rAluno').value = '';
   buildRelatorios();
 }
@@ -1891,7 +1952,7 @@ function initRelatorios() {
     populateSelect('rAno', anos, 'Todos');
     buildMS('msRelMes',      meses,    'buildRelatorios');
     buildMS('msRelUnidade',  unidades, 'buildRelatorios');
-    buildMS('msRelOrigem',   origens,  'buildRelatorios');
+    buildMS('msRelOrigem',   origens,  'buildRelatorios', { searchable: true });
     const curYear = String(new Date().getFullYear());
     if (anos.includes(curYear)) selAno.value = curYear;
     _carregarLinkDrive();
@@ -1926,11 +1987,13 @@ function buildRelatorios() {
   const norm     = s => String(s||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const inArr    = (v, arr) => !arr.length || arr.map(norm).includes(norm(String(v)));
   const aluno    = norm(document.getElementById('rAluno').value);
+  const status   = document.getElementById('rStatus').value;
   const filtered = FULL_ROWS.filter(r =>
     (!ano || String(r.ano) === ano) &&
     inArr(r.mes, meses) &&
     inArr(r.unidade, unidade) &&
     inArr(r.origemBolsa, origem) &&
+    (!status || r.statusAluno === status) &&
     (!aluno || norm(r.nome).includes(aluno))
   );
   _relFiltered = filtered;
@@ -2355,6 +2418,13 @@ function renderPDFsGerados(rows) {
   _pdfsGeradosData = rows;
   var busca = document.getElementById('pdfsBusca');
   if (busca) busca.value = '';
+  var _MESES_ORD = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var anosSet = {}, mesesSet = {};
+  rows.forEach(function(r) { if (r.ano) anosSet[r.ano] = 1; if (r.mes) mesesSet[r.mes] = 1; });
+  var anos  = Object.keys(anosSet).sort().reverse();
+  var meses = _MESES_ORD.filter(function(m) { return mesesSet[m]; });
+  buildMS('msPdfsAno',  anos,  'filterPDFsGerados');
+  buildMS('msPdfsMes',  meses, 'filterPDFsGerados');
   filterPDFsGerados();
 }
 
@@ -2375,17 +2445,22 @@ function filterPDFsGerados() {
     return;
   }
 
-  var data = q
-    ? _pdfsGeradosData.filter(function(r) {
-        var haystack = normStr(r.titulo) + ' ' + normStr(r.origemBolsa) + ' ' + normStr(r.mes) + ' ' + normStr(r.ano);
-        return haystack.indexOf(q) !== -1;
-      })
-    : _pdfsGeradosData;
+  var selAnos  = getMS('msPdfsAno');
+  var selMeses = getMS('msPdfsMes');
+  var data = _pdfsGeradosData.filter(function(r) {
+    if (selAnos.length  && selAnos.indexOf(r.ano)  === -1) return false;
+    if (selMeses.length && selMeses.indexOf(r.mes) === -1) return false;
+    if (q) {
+      var haystack = normStr(r.titulo) + ' ' + normStr(r.origemBolsa) + ' ' + normStr(r.mes) + ' ' + normStr(r.ano);
+      if (haystack.indexOf(q) === -1) return false;
+    }
+    return true;
+  });
 
   countEl.textContent = data.length + ' arquivo' + (data.length !== 1 ? 's' : '');
 
   if (!data.length) {
-    listEl.innerHTML = '<div style="padding:24px 16px;text-align:center;color:var(--gray-400);font-size:.82rem">Nenhum resultado para "' + esc(buscaEl ? buscaEl.value : '') + '".</div>';
+    listEl.innerHTML = '<div style="padding:24px 16px;text-align:center;color:var(--gray-400);font-size:.82rem">Nenhum PDF encontrado para os filtros selecionados.</div>';
     return;
   }
 
@@ -2416,6 +2491,15 @@ function filterPDFsGerados() {
       '</div>';
   });
   listEl.innerHTML = html;
+}
+
+function clearPdfsFilters() {
+  ['msPdfsAno','msPdfsMes'].forEach(function(id) {
+    document.querySelectorAll('#' + id + ' .ms-panel input').forEach(function(cb) { cb.checked = false; });
+    updateMSLabel(id);
+  });
+  document.getElementById('pdfsBusca').value = '';
+  filterPDFsGerados();
 }
 
 function openEmailModalFromLog(idx, btn) {

@@ -936,10 +936,10 @@ function _buildPDFSection(body, rows, origemBolsa, mes, ano, isFirst, customOrig
 
   // ── Tabela de dados ──
   const hdrs = [
-    'Aluno', 'Unidade', '% Bolsa', 'Módulo', 'Freq. / Horário\n/ Dias Aula',
-    'Data\n1ª Aula', 'Início\nMódulo', 'Prev.\nConclusão',
-    'Aulas\nPrev.', 'Aulas\nAssist.', 'Faltas\n/Mês',
-    'Valor', 'T1', 'T2', 'MT', 'WT', 'OC', 'OT',
+    'Nome', 'Unidade', 'Percentual bolsa', 'Módulo', 'Freq./Hor./Dias',
+    'Data 1ª aula\nno BRASAS', 'Início\nMódulo', 'Prev. conclusão\nmódulo',
+    'Aulas\nPrev.', 'Aulas\nAssist.', 'Faltas\nno mês',
+    'Mensalidade BRASAS', 'T1', 'T2', 'MT', 'WT', 'OC', 'OT',
     'Média Final', 'Conceito', 'Observações',
   ];
 
@@ -1426,7 +1426,7 @@ function _buildEmailHtml(origemBolsa, mes, ano, obsExtra, logoSrc) {
     : `<div style="font-size:20px;font-weight:700;color:#fff;letter-spacing:.5px;margin-bottom:12px">BRASAS</div>`;
 
   const obsHtml = obsExtra
-    ? `<p style="margin:18px 0 0;font-size:14px;color:#334155;line-height:1.65">${obsExtra}</p>`
+    ? `<p style="margin:18px 0 0;font-size:14px;color:#334155;line-height:1.65">${obsExtra.replace(/\n/g, '<br>')}</p>`
     : '';
 
   return `<!DOCTYPE html>
@@ -1444,7 +1444,7 @@ function _buildEmailHtml(origemBolsa, mes, ano, obsExtra, logoSrc) {
       <p style="margin:0 0 14px;font-size:14px;color:#334155">Olá!</p>
       <p style="margin:0;font-size:14px;color:#334155;line-height:1.65">
         Segue em anexo o <strong>Relatório de Frequência e Aproveitamento</strong> dos alunos bolsistas de
-        <strong>${origemBolsa}</strong>, referente ao mês de <strong>${mes} - ${ano}</strong>.
+        <strong>${origemBolsa}</strong>, referente ${mes && mes.includes(',') ? 'aos meses de' : 'ao mês de'} <strong>${mes} - ${ano}</strong>.
       </p>
       ${obsHtml}
     </div>
