@@ -17,7 +17,7 @@ Google Apps Script — painel de gestão de alunos bolsistas.
 **Abas em USERS_SHEET:**
 - `SESSOES` — tokens de sessão com expiração
 - `ROLES` — permissões por role (coluna `bolsistas` = TRUE/FALSE) — não usado em `_hasAccess` atualmente
-- `USUARIOS` — cadastro de usuários; coluna A = e-mail, coluna E = unidade (restrição de acesso), colunas F e G = `acessos_dashboards`
+- `USUARIOS` — cadastro de usuários; colunas: A e-mail, B nome, C role, D unidade (restrição de acesso), E ativo, F e G = `acessos_dashboards`. `bolsistas` na lista de acessos é só o token de entrada no app (como `mat` para matrículas) — não concede acesso a nenhuma página sozinho; cada página exige seu próprio token (`bolsistas_alunos`, `bolsistas_relatorios`, `bolsistas_historico`, `bolsistas_motivo` — singular, `bolsistas_liberacao`)
 
 **Abas em BOLSISTAS_SHEET:**
 - `Bolsistas App` — dados principais lidos/editados pelo painel
@@ -94,7 +94,7 @@ Todos client-side via `applyFilters()` sobre `FULL_ROWS`. Multi-select: Ano, Mê
 - `appdata_TOKEN` → resultado de `initApp` serializado (300s) — invalidado por `updateBolsista`
 
 ### Restrição de unidade
-`_getUserUnidade(ss, email)` lê coluna E da aba USUARIOS. Se não-vazio, o usuário só vê linhas cuja `unidade` bate com a lista (suporta múltiplas unidades separadas por vírgula).
+`_getUserUnidade(ss, email)` lê coluna D da aba USUARIOS. Se não-vazio, o usuário só vê linhas cuja `unidade` bate com a lista (suporta múltiplas unidades separadas por vírgula).
 
 ## Implementado (histórico de features)
 

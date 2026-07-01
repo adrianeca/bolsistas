@@ -95,7 +95,7 @@ function _getUserUnidade(ss, email) {
   const d = sheet.getDataRange().getValues();
   for (let i = 1; i < d.length; i++) {
     if (norm(d[i][0]) !== norm(email)) continue;
-    return String(d[i][4] || '').trim(); // Col E = unidade
+    return String(d[i][3] || '').trim(); // Col D = unidade
   }
   return '';
 }
@@ -116,12 +116,13 @@ function _hasAccess(ss, role, email) {
       .split(',')
       .map(s => norm(s));
 
-    const hasFull = acessos.includes('bolsistas');
-    const canViewAlunos      = hasFull || acessos.includes('bolsistas_alunos');
-    const canViewRelatorios  = hasFull || acessos.includes('bolsistas_relatorios');
-    const canViewHistorico   = hasFull || acessos.includes('bolsistas_historico');
-    const canViewMotivos     = hasFull || acessos.includes('bolsistas_motivos');
-    const canViewLiberacoes  = hasFull || acessos.includes('bolsistas_liberacao');
+    // 'bolsistas' é apenas o token de entrada no app (como 'mat' para o módulo de
+    // matrículas) — não concede acesso a todas as páginas, cada uma exige seu próprio token.
+    const canViewAlunos      = acessos.includes('bolsistas_alunos');
+    const canViewRelatorios  = acessos.includes('bolsistas_relatorios');
+    const canViewHistorico   = acessos.includes('bolsistas_historico');
+    const canViewMotivos     = acessos.includes('bolsistas_motivo');
+    const canViewLiberacoes  = acessos.includes('bolsistas_liberacao');
 
     if (!canViewAlunos && !canViewRelatorios && !canViewMotivos && !canViewLiberacoes) return null;
     return { canViewAlunos, canViewRelatorios, canViewHistorico, canViewMotivos, canViewLiberacoes };
@@ -266,7 +267,7 @@ function initApp(token) {
       });
     }
 
-    const isEditLocked = !LOCK_EXEMPT_ROLES.includes(user.role) && _isPastFifthBusinessDay() && !_hasTempGrant(user.email);
+    const isEditLocked = !LOCK_EXEMPT_ROLES.includes(user.role) && _isPastDay10() && !_hasTempGrant(user.email);
 
     const result = JSON.stringify({
       ok:       true,
@@ -426,8 +427,8 @@ function updateBolsista(token, payloadJson) {
     const user = _getUser(token);
     if (!user.canEdit) throw new Error('Sem permissão para editar.');
 
-    if (!LOCK_EXEMPT_ROLES.includes(user.role) && _isPastFifthBusinessDay() && !_hasTempGrant(user.email)) {
-      throw new Error('Edição bloqueada após o 5º dia útil do mês.');
+    if (!LOCK_EXEMPT_ROLES.includes(user.role) && _isPastDay10() && !_hasTempGrant(user.email)) {
+      throw new Error('Edição bloqueada a partir do dia 10 do mês.');
     }
 
     const { rowIndex, field, value } = JSON.parse(payloadJson);
@@ -1673,26 +1674,9 @@ function enviarEmailLiberacao(token, toEmail, body) {
   }
 }
 
-// ─── Bloqueio após 5º dia útil ───────────────────────────────
-function _isPastFifthBusinessDay() {
-  const cache     = CacheService.getScriptCache();
-  const ferCached = cache.get('feriados_v1');
-  const feriados  = ferCached ? JSON.parse(ferCached) : [];
-
-  const now   = new Date();
-  const year  = now.getFullYear();
-  const month = now.getMonth();
-  const today = now.getDate();
-
-  let bizDays = 0;
-  for (let d = 1; d <= today; d++) {
-    const dt  = new Date(year, month, d);
-    if (dt.getDay() === 0 || dt.getDay() === 6) continue; // fim de semana
-    const fmt = String(d).padStart(2,'0') + '/' + String(month+1).padStart(2,'0') + '/' + year;
-    if (feriados.includes(fmt)) continue; // feriado
-    if (++bizDays >= 5) return true;
-  }
-  return false;
+// ─── Bloqueio a partir do dia 10 do mês ──────────────────────
+function _isPastDay10() {
+  return new Date().getDate() >= 10;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────
