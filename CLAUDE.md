@@ -96,6 +96,8 @@ Todos client-side via `applyFilters()` sobre `FULL_ROWS`. Multi-select: Ano, Mê
 ### Restrição de unidade
 `_getUserUnidade(ss, email)` lê coluna D da aba USUARIOS. Se não-vazio, o usuário só vê linhas cuja `unidade` bate com a lista (suporta múltiplas unidades separadas por vírgula).
 
+`UNIDADE_ALIASES` (Code.gs) mapeia nomes de unidade que divergem entre a aba USUARIOS e a planilha de bolsistas (ex: `ONLINE` em USUARIOS = `BOL` nos dados). Adicionar novas entradas ali se surgirem outras divergências.
+
 ## Implementado (histórico de features)
 
 - ~~Simplificar `_hasAccess`~~ — lê apenas aba USUARIOS, elimina leitura de ROLES

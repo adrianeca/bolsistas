@@ -100,6 +100,16 @@ function _getUserUnidade(ss, email) {
   return '';
 }
 
+// Unidades com nomes diferentes entre a aba USUARIOS e a planilha de bolsistas
+const UNIDADE_ALIASES = { online: 'bol' };
+
+// Recebe a lista de unidades do usuário já normalizada e inclui os apelidos equivalentes
+function _withUnidadeAliases(list) {
+  const out = new Set(list);
+  list.forEach(u => { if (UNIDADE_ALIASES[u]) out.add(UNIDADE_ALIASES[u]); });
+  return [...out];
+}
+
 function _hasAccess(ss, role, email) {
   const norm = s => String(s || '').trim().toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -210,7 +220,7 @@ function initApp(token) {
 
     const userUnidades = (user.isAdmin || !user.unidade)
       ? null
-      : user.unidade.split(/[,|]/).map(s => norm(s.trim())).filter(Boolean);
+      : _withUnidadeAliases(user.unidade.split(/[,|]/).map(s => norm(s.trim())).filter(Boolean));
 
     const rows = [];
     const meses = new Set(), anos = new Set(), unidades = new Set(), origens = new Set();
@@ -315,7 +325,7 @@ function getBolsistasData(token, paramsJson) {
     // Unidades permitidas para o usuário
     const userUnidades = (user.isAdmin || !user.unidade)
       ? null
-      : user.unidade.split(/[,|]/).map(s => norm(s.trim())).filter(Boolean);
+      : _withUnidadeAliases(user.unidade.split(/[,|]/).map(s => norm(s.trim())).filter(Boolean));
 
     const rows = [];
     for (let i = 1; i < data.length; i++) {
@@ -393,7 +403,7 @@ function getFilterOptions(token) {
 
     const userUnidades = (user.isAdmin || !user.unidade)
       ? null
-      : user.unidade.split(/[,|]/).map(s => norm(s.trim())).filter(Boolean);
+      : _withUnidadeAliases(user.unidade.split(/[,|]/).map(s => norm(s.trim())).filter(Boolean));
 
     const meses = new Set(), anos = new Set(), unidades = new Set(), origens = new Set();
 
@@ -489,7 +499,7 @@ function updateBolsista(token, payloadJson) {
     if (!user.isAdmin && user.unidade) {
       const norm    = s => String(s || '').trim().toLowerCase()
         .normalize('NFD').replace(/[̀-ͯ]/g, '');
-      const permitidas = user.unidade.split(/[,|]/).map(s => norm(s.trim()));
+      const permitidas = _withUnidadeAliases(user.unidade.split(/[,|]/).map(s => norm(s.trim())));
       if (!permitidas.includes(norm(String(ctx[2])))) {
         throw new Error('Sem acesso a esta unidade.');
       }
