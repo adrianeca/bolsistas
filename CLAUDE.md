@@ -106,6 +106,7 @@ Todos client-side via `applyFilters()` sobre `FULL_ROWS`. Multi-select: Ano, Mê
 - ~~Restrição por unidade~~ — filtra linhas pelo campo UNIDADE da aba USUARIOS
 - ~~PDF preview antes de enviar~~ — botão "Ver PDF" por empresa + link no modal de e-mail
 - ~~Envio por empresa individual~~ — cada empresa tem seus próprios botões independentes
+- ~~Guia de Preenchimento~~ — aba `data-tab="guia"` / `viewGuia` com conteúdo estático (baseado no Manual de Preenchimento do Relatório de Bolsistas). Sem token de acesso próprio: visível para qualquer usuário com acesso ao painel (não gated por `acessos_dashboards`), pois é conteúdo de referência, não dado sensível.
 
 ## Line endings
 

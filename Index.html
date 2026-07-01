@@ -435,6 +435,44 @@ td.editable.saving{opacity:.6;pointer-events:none}
   font-size:.72rem;font-weight:600;padding:1px 8px;border-radius:20px;margin:1px 2px;
 }
 
+/* Guia de Preenchimento */
+.guia-wrap{max-width:880px;margin:0 auto;padding-bottom:40px}
+.guia-toc{
+  background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius);
+  padding:16px 20px;margin-bottom:24px;display:flex;flex-wrap:wrap;gap:8px 16px;
+}
+.guia-toc-title{width:100%;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gray-400);margin-bottom:4px}
+.guia-toc a{color:var(--navy-500);font-size:.82rem;font-weight:600;text-decoration:none}
+.guia-toc a:hover{text-decoration:underline}
+.guia-section{
+  background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius);
+  padding:20px 24px;margin-bottom:18px;scroll-margin-top:110px;
+}
+.guia-section h2{font-size:1rem;font-weight:700;color:var(--navy-800);margin:0 0 14px}
+.guia-section h3{font-size:.85rem;font-weight:700;color:var(--navy-700);margin:16px 0 4px}
+.guia-section h3:first-of-type{margin-top:0}
+.guia-section p{font-size:.85rem;line-height:1.55;color:var(--gray-700);margin:0 0 8px}
+.guia-section ul{margin:0 0 8px;padding-left:20px}
+.guia-section li{font-size:.85rem;line-height:1.55;color:var(--gray-700);margin-bottom:4px}
+.guia-note{
+  background:#fff3cd;border:1px solid #f5d98b;border-radius:7px;
+  padding:10px 14px;font-size:.82rem;color:#7a5b00;margin:10px 0;
+}
+.guia-note strong{color:#5c4400}
+.guia-table{width:100%;border-collapse:collapse;font-size:.83rem;margin:8px 0}
+.guia-table th{
+  text-align:left;padding:8px 12px;font-size:.67rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--gray-400);background:var(--gray-50);border-bottom:1px solid var(--gray-200);
+}
+.guia-table td{padding:7px 12px;border-bottom:1px solid var(--gray-100);color:var(--gray-700)}
+.guia-example{
+  background:var(--gray-50);border-left:3px solid var(--navy-300);border-radius:0 6px 6px 0;
+  padding:8px 12px;margin-bottom:10px;
+}
+.guia-example strong{display:block;font-size:.78rem;color:var(--navy-700);margin-bottom:3px}
+.guia-example ul{margin:0;padding-left:18px}
+.guia-example li{font-size:.82rem;color:var(--gray-600);margin-bottom:2px}
+
 @media(max-width:768px){
   .app-body{padding:16px}
   .filters-bar{flex-direction:column;align-items:stretch}
@@ -488,6 +526,7 @@ td.editable.saving{opacity:.6;pointer-events:none}
     <button class="tab-btn" data-tab="historico" onclick="switchTab('historico')" style="display:none">Histórico</button>
     <button class="tab-btn" data-tab="motivos" onclick="switchTab('motivos')" style="display:none">Motivos de Desconto</button>
     <button class="tab-btn" data-tab="liberacoes" onclick="switchTab('liberacoes')" style="display:none">Liberações</button>
+    <button class="tab-btn" data-tab="guia" onclick="switchTab('guia')">Guia de Preenchimento</button>
   </nav>
 
   <div class="app-body">
@@ -837,6 +876,223 @@ td.editable.saving{opacity:.6;pointer-events:none}
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="viewGuia" style="display:none;padding:24px">
+    <div class="guia-wrap">
+      <div class="guia-toc">
+        <span class="guia-toc-title">Navegar para</span>
+        <a href="#guia-origem">Origem da Bolsa</a>
+        <a href="#guia-fundamentais">Informações Fundamentais</a>
+        <a href="#guia-orientacoes">Orientações para Preenchimento</a>
+        <a href="#guia-legenda">Legenda do Conceito</a>
+        <a href="#guia-avaliacoes">Avaliações</a>
+        <a href="#guia-observacoes">Registros em Observações</a>
+        <a href="#guia-autorizacao">Movimentações com Autorização Prévia</a>
+        <a href="#guia-cancelados">Alunos Cancelados</a>
+      </div>
+
+      <div class="guia-section" id="guia-origem">
+        <h2>A Origem da Bolsa</h2>
+        <h3>Dependente BRASAS</h3>
+        <p>Aluno dependente direto de colaborador BRASAS.</p>
+        <h3>Funcionário BRASAS</h3>
+        <p>Colaborador ativo no BRASAS.</p>
+        <h3>Jovem Aprendiz BRASAS</h3>
+        <p>Aluno vinculado ao BRASAS via programa jovem aprendiz.</p>
+        <h3>Menor Aprendiz BRASAS</h3>
+        <p>Aluno vinculado ao BRASAS via programa menor aprendiz.</p>
+        <h3>Bolsista BRASAS</h3>
+        <p>Aluno com autorização excepcional para estudar no BRASAS, com aplicação de algum percentual que caracteriza bolsa.</p>
+        <h3>Projetos Sociais</h3>
+        <p>Alunos indicados por projetos parceiros do BRASAS, encaminhados às unidades BRASAS pelo time B2B. Ex: Instituto Reação.</p>
+        <h3>Bolsas Escolas Parceiras</h3>
+        <p>Alunos indicados por escolas parceiras do BRASAS, encaminhados às unidades BRASAS pelo time B2B.</p>
+      </div>
+
+      <div class="guia-section" id="guia-fundamentais">
+        <h2>Informações Fundamentais</h2>
+        <ul>
+          <li>Os alunos bolsistas não possuem autonomia para realizar qualquer tipo de movimentação (transferência, cancelamento) em sua matrícula por conta própria. Todos precisam de autorização prévia.</li>
+          <li>Em "Observações" deverá ser informado tudo o que ocorreu com o aluno durante o período do relatório.</li>
+          <li>Não aguarde a data regular de liberação do relatório para reportar ocorrências relevantes.</li>
+          <li>O departamento <strong>BRASAS Solutions</strong> deve ser informado no exato momento em que ocorrerem situações de solicitação de transferência ou cancelamento, encerramento de turma (especialmente por falta de quórum) e não aprovação do aluno (com retenção no módulo atual).</li>
+        </ul>
+      </div>
+
+      <div class="guia-section" id="guia-orientacoes">
+        <h2>Orientações para Preenchimento</h2>
+        <h3>Status</h3>
+        <p>Deve corresponder ao status do aluno no sistema no mês referente ao relatório: Vigente, Cancelado, Transferido ou Testes incompletos.</p>
+        <h3>Data da 1ª Aula no BRASAS</h3>
+        <p>Deve corresponder à data em que o aluno assistiu à primeira aula no BRASAS. Essa informação consta no cadastro do aluno no Sophia, em dados complementares.</p>
+        <h3>Data de Início do Módulo</h3>
+        <p>Deve ser atualizada na troca de módulo, quando forem informados os resultados finais do módulo anterior.</p>
+        <h3>Frequência</h3>
+        <ul>
+          <li>Turmas com dois tempos de aula em um único dia (sexta ou sábado) caracterizam uma frequência de 2x por semana.</li>
+          <li>Turmas com aulas de 1h ou 1h25min, realizadas em apenas um dia da semana, apenas sexta ou apenas sábado, caracterizam uma frequência de 1x por semana.</li>
+          <li>Turmas que ocorrem 3x na semana com duração de 1h são contabilizadas na frequência de 2x por semana.</li>
+        </ul>
+        <h3>Horário (Exemplo: 18h às 19h25)</h3>
+        <p>Manter apenas o horário, conforme o exemplo. Não incluir os dias da semana.</p>
+        <h3>Dias de aula (Exemplo: terça e quinta)</h3>
+        <p>Preencher com os dias da semana em que as aulas ocorrem.</p>
+        <h3>Previsão de conclusão do Módulo</h3>
+        <p>Caso haja alteração da data prevista, por atraso ou prorrogação, a informação deverá ser atualizada no relatório e o motivo informado em "Observações".</p>
+        <h3>Aulas Previstas</h3>
+        <ul>
+          <li>Informar a quantidade de aulas previstas no mês do relatório. Lembrando que as turmas que ocorrem 3x na semana com duração de 1h são contabilizadas na frequência de 2x semanais.</li>
+          <li>Em caso de transferências de unidade durante o mês, devem ser contabilizadas as aulas até o período em que o aluno esteve vigente. Na unidade nova, devem ser contabilizadas as aulas a partir da data da primeira aula prevista.</li>
+        </ul>
+        <h3>Aulas Assistidas</h3>
+        <ul>
+          <li>Contar todas as presenças do aluno no mês e informar a quantidade de aulas que foram assistidas no mês do relatório.</li>
+          <li>Não é necessário informar no campo de observação as datas das faltas.</li>
+        </ul>
+        <h3>Unidade Funcionário BRASAS</h3>
+        <ul>
+          <li>Campo liberado apenas para o preenchimento do bolsista que é <strong>Dependente BRASAS</strong>.</li>
+          <li>Deve ser preenchido com a unidade em que o funcionário do BRASAS, que é responsável pelo dependente, está ativo.</li>
+        </ul>
+        <h3>Nome Funcionário BRASAS</h3>
+        <ul>
+          <li>Campo liberado apenas para o preenchimento do bolsista que é <strong>Dependente BRASAS</strong>.</li>
+          <li>Após o preenchimento da unidade em que o funcionário BRASAS está ativo, deve ser selecionado o nome do funcionário responsável pelo dependente.</li>
+        </ul>
+        <h3>Atenção às Férias e Recessos</h3>
+        <p>Durante períodos de férias ou recesso BRASAS:</p>
+        <ul>
+          <li>Informar apenas os dias previstos para aula.</li>
+          <li>Registrar em "Observações" o período de férias ou recesso referentes a dezembro, janeiro e julho.</li>
+        </ul>
+      </div>
+
+      <div class="guia-section" id="guia-legenda">
+        <h2>Legenda do Conceito</h2>
+        <table class="guia-table">
+          <thead><tr><th>Conceito</th><th>Notas</th></tr></thead>
+          <tbody>
+            <tr><td>E - Excelente</td><td>90 a 100</td></tr>
+            <tr><td>MB - Muito Bom</td><td>80 a 89</td></tr>
+            <tr><td>B - Bom</td><td>70 a 79</td></tr>
+            <tr><td>R - Regular</td><td>60 a 69</td></tr>
+            <tr><td>I - Insuficiente</td><td>Abaixo de 60</td></tr>
+            <tr><td>Nulo</td><td>0 ou apenas 1 aula assistida</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="guia-section" id="guia-avaliacoes">
+        <h2>Avaliações</h2>
+        <ul>
+          <li>Solicitar aos professores que registrem o conceito do aluno obrigatoriamente no e-teacher.</li>
+          <li>Alinhar o conceito do mês à nota do Midterm (MT) ou à média das avaliações finais, caso o mês de referência do relatório tenha tido avaliações. Cálculo da Média Final: (WT + OC + OT) / 3.</li>
+          <li>Manter a nota do Midterm e a sua data de realização no relatório até que o aluno conclua o módulo atual.</li>
+          <li>Inserir as notas das avaliações finais no relatório exclusivamente no mês em que as provas forem realizadas. Não é necessário manter nos meses seguintes.</li>
+          <li>Sempre que houver a inclusão das notas das avaliações finais é necessário informar em observações a data em que o aluno concluiu as provas e a condição do aluno: se foi aprovado para o próximo nível, se não atingiu a nota mínima para aprovação ou se está com testes incompletos.</li>
+          <li>Nos meses em que não há avaliação, os professores devem informar o conceito do aluno de acordo com a participação em sala de aula.</li>
+          <li>O relatório não pode ser liberado sem o conceito de aproveitamento do aluno.</li>
+          <li>No relatório referente a janeiro, que é um mês de férias, pode-se repetir o conceito de dezembro caso o número mínimo de aulas não tenha sido atingido.</li>
+          <li>Todo aluno com conceito I (Insuficiente) no aproveitamento deve ter a justificativa do professor em observações, exceto quando esse conceito é atribuído a nota de MT/provas/média final abaixo de 60.</li>
+        </ul>
+        <h3>Nota Mínima Para Manutenção da Bolsa</h3>
+        <p>Obter a nota mínima de 70 em todas as provas para aprovação, conforme Regulamento de Bolsistas.</p>
+        <div class="guia-note"><strong>Obs.:</strong> o aluno pode não obter aprovação mesmo que sua média final seja superior a 70, caso não atinja a nota mínima em todas as provas individualmente.</div>
+      </div>
+
+      <div class="guia-section" id="guia-observacoes">
+        <h2>Registros Obrigatórios em Observações</h2>
+        <ul>
+          <li>Deve ser informado tudo aquilo que ocorreu com o aluno dentro do período (transferências, justificativas de faltas, contatos realizados, aprovação, não aprovação, conclusão do book 10, retirada de material...).</li>
+          <li>E comentários do professor a respeito do desempenho do aluno.</li>
+        </ul>
+        <h3>Exemplos de preenchimento por caso</h3>
+        <div class="guia-example">
+          <strong>Midterm</strong>
+          <ul><li>Midterm realizado em DD/MM/AAAA.</li></ul>
+        </div>
+        <div class="guia-example">
+          <strong>Testes Incompletos</strong>
+          <ul>
+            <li>Aluno com avaliações pendentes. Próximas provas agendadas para DD/MM/AAAA.</li>
+            <li>O status do aluno deve ser alterado para Testes Incompletos.</li>
+          </ul>
+        </div>
+        <div class="guia-example">
+          <strong>Conclusão do Módulo</strong>
+          <ul>
+            <li>Aprovado no Book X em DD/MM/AAAA.</li>
+            <li>Provas realizadas em DD/MM/AAAA. O aluno não atingiu as notas mínimas necessárias para aprovação no Book X.</li>
+          </ul>
+        </div>
+        <div class="guia-example">
+          <strong>Transferência</strong>
+          <ul>
+            <li>Transferido da turma ______ para a turma ______ em DD/MM/AAAA.</li>
+            <li>Transferido da unidade ______ para a unidade ______ em DD/MM/AAAA.</li>
+            <li>Em caso de transferência de unidade durante o mês, devem ser contabilizadas as aulas até o período em que o aluno esteve vigente. Na unidade nova, devem ser contabilizadas as aulas a partir da data da primeira aula prevista.</li>
+            <li>Quando o aluno for transferido para outra unidade, o status deve ser alterado para Transferido no relatório da unidade anterior.</li>
+          </ul>
+        </div>
+        <div class="guia-example">
+          <strong>Cancelamento</strong>
+          <ul>
+            <li>Cancelado em DD/MM/AAAA.</li>
+            <li>O status do aluno deve ser alterado para Cancelado.</li>
+          </ul>
+        </div>
+        <div class="guia-example">
+          <strong>Ausências Justificadas</strong>
+          <ul>
+            <li>Aluno informou viagem a trabalho nos dias DD/MM/AAAA.</li>
+            <li>Aluno apresentou atestado médico para os dias DD/MM/AAAA.</li>
+          </ul>
+        </div>
+        <div class="guia-example">
+          <strong>Ausências Não Justificadas</strong>
+          <ul><li>O aluno não retornou as tentativas de contato.</li></ul>
+        </div>
+        <div class="guia-note"><strong>Obs.:</strong> a partir de duas faltas consecutivas deve ser feito contato com o aluno para entender o motivo das faltas.</div>
+        <div class="guia-example">
+          <strong>Retirada de Material Didático</strong>
+          <ul><li>Retirou 1 Book X em DD/MM/AAAA.</li></ul>
+        </div>
+        <div class="guia-example">
+          <strong>Encerramento de Turma por Falta de Quórum</strong>
+          <ul><li>Turma encerrada devido ao número insuficiente de alunos. O estudante foi transferido para a turma XXX em DD/MM/AAAA.</li></ul>
+        </div>
+      </div>
+
+      <div class="guia-section" id="guia-autorizacao">
+        <h2>Movimentações que Exigem Autorização Prévia</h2>
+        <p>Toda movimentação ou ocorrência abaixo deverá ser previamente solicitada e autorizada pelo Departamento BRASAS Solutions:</p>
+        <ul>
+          <li>Transferência de turma</li>
+          <li>Transferência de unidade</li>
+          <li>Cancelamento</li>
+          <li>Reprovação</li>
+          <li>Alterações acadêmicas relevantes</li>
+        </ul>
+        <p>Para solicitações de transferência, informar por e-mail:</p>
+        <ul>
+          <li>Motivo da solicitação da transferência.</li>
+          <li>Informações da turma atual (Módulo/Livro, dias e horários, lição atual, data prevista para término do módulo, unidade).</li>
+          <li>Informações da turma pretendida (Módulo/Livro, dias e horários, lição atual, data prevista para término do módulo, unidade).</li>
+        </ul>
+      </div>
+
+      <div class="guia-section" id="guia-cancelados">
+        <h2>Alunos Cancelados</h2>
+        <p>Quando um aluno for cancelado durante o período de referência do relatório:</p>
+        <ul>
+          <li>Ele deverá permanecer no relatório daquele mês.</li>
+          <li>O status do aluno deve ser alterado para Cancelado.</li>
+          <li>A data do cancelamento deverá constar em "Observações".</li>
+          <li>Somente no relatório do mês seguinte o aluno poderá ser removido.</li>
+        </ul>
       </div>
     </div>
   </div>
@@ -2016,6 +2272,7 @@ function switchTab(tab) {
   document.getElementById('viewHistorico').style.display  = tab === 'historico'  ? '' : 'none';
   document.getElementById('viewMotivos').style.display    = tab === 'motivos'    ? '' : 'none';
   document.getElementById('viewLiberacoes').style.display = tab === 'liberacoes' ? '' : 'none';
+  document.getElementById('viewGuia').style.display       = tab === 'guia'       ? '' : 'none';
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   if (tab === 'relatorios') { initRelatorios(); _syncFiltersToRelatorio(); }
   if (tab === 'historico')  { loadHistorico(); }
