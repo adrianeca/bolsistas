@@ -1255,10 +1255,6 @@ function onSessionValidated(jsonStr) {
   document.getElementById('userChipRole').textContent = USER.role;
 
 
-  if (!USER.isAdmin) {
-    document.getElementById('fUnidadeWrap').style.display = 'none';
-  }
-
   // Visibilidade das tabs por permissão
   document.querySelector('[data-tab="alunos"]').style.display     = USER.canViewAlunos     ? '' : 'none';
   document.querySelector('[data-tab="relatorios"]').style.display = USER.canViewRelatorios ? '' : 'none';
@@ -1298,6 +1294,10 @@ function onAppData(jsonStr) {
   buildMS('msMes',     [...(res.meses||[])].sort((a,b)=>(MES_ORDER[normMesKey(a)]||99)-(MES_ORDER[normMesKey(b)]||99)));
   buildMS('msUnidade', res.unidades);
   buildMS('msOrigem',  res.origens, 'applyFilters', { searchable: true });
+
+  // Filtro de Unidade só faz sentido se o usuário enxerga mais de uma unidade
+  document.getElementById('fUnidadeWrap').style.display =
+    (USER.isAdmin || (res.unidades && res.unidades.length > 1)) ? '' : 'none';
 
   FERIADOS     = new Set(res.feriados || []);
   FUNCIONARIOS = res.funcionarios || { unidades: [], porUnidade: {} };
