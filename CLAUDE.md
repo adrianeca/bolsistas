@@ -88,6 +88,8 @@ Todos client-side via `applyFilters()` sobre `FULL_ROWS`. Multi-select: Ano, Mê
 | `enviarEmail(token, payloadJson)` | Envia e-mail com PDF anexado para o parceiro |
 | `getChavesPDF(token, mes, ano)` | Lista chaves PDF disponíveis (ainda existe, não mais usado pelo frontend) |
 | `runCicloMensal(token)` | Executa ciclo mensal (backup + consolidado → Bolsistas App) |
+| `conferirVigentes(token)` | Confere se todo aluno `Vigente` (col AA) de `db_bolsistas_mes_anterior` foi lançado no mês seguinte em `Bolsistas App`. Roda no editor via `testeConferirVigentes()` |
+| `gerarAbaVigentesFaltantes(token)` | Mesma conferência, mas grava o resultado na aba `conferencia_vigentes` com as linhas completas do mês anterior. Admin-only. Roda no editor via `testeGerarAbaVigentes()` |
 
 ### CacheService
 - `user_TOKEN` → objeto do usuário (600s) — invalidado automaticamente ao expirar
@@ -106,6 +108,7 @@ Todos client-side via `applyFilters()` sobre `FULL_ROWS`. Multi-select: Ano, Mê
 - ~~Restrição por unidade~~ — filtra linhas pelo campo UNIDADE da aba USUARIOS
 - ~~PDF preview antes de enviar~~ — botão "Ver PDF" por empresa + link no modal de e-mail
 - ~~Envio por empresa individual~~ — cada empresa tem seus próprios botões independentes
+- ~~Conferência de Vigentes~~ — `conferirVigentes` / `testeConferirVigentes` em `Code.gs`. Cruza os `Vigente` do mês anterior com o mês seguinte de `Bolsistas App` (chave: unidade + nome, normalizados). `gerarAbaVigentesFaltantes` / `testeGerarAbaVigentes` escreve o resultado na aba `conferencia_vigentes` (recriada a cada execução; nenhuma outra aba é tocada). Sem UI no painel ainda.
 - ~~Guia de Preenchimento~~ — aba `data-tab="guia"` / `viewGuia` com conteúdo estático (baseado no Manual de Preenchimento do Relatório de Bolsistas). Sem token de acesso próprio: visível para qualquer usuário com acesso ao painel (não gated por `acessos_dashboards`), pois é conteúdo de referência, não dado sensível.
 
 ## Line endings

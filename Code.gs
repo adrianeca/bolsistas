@@ -678,6 +678,332 @@ function _formatarHorarios() {
   return `Formatar horários: ${count} células formatadas.`;
 }
 
+// ─── Conferência: Vigentes do mês anterior × mês seguinte ────
+// Confere se todo aluno com Status do Aluno = "Vigente" na aba
+// db_bolsistas_mes_anterior (mês N) foi lançado na aba "Bolsistas App"
+// no mês seguinte (N+1). Todos precisam estar.
+//
+// Layout db_bolsistas_mes_anterior: A Unidade | B Mês | C Ano | D Nome |
+//   F Origem Bolsa | H Book | V Turma | AA Status do Aluno
+// Layout Bolsistas App: C Unidade | D Mês | E Ano | F Nome
+
+const _MESES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+function _normTxt(v) {
+  return String(v == null ? '' : v).trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+// "06 Junho" → 6 | "Junho" → 6 | 6 → 6 | qualquer outra coisa → 0
+function _mesNum(v) {
+  const s = String(v == null ? '' : v).trim();
+  const m = s.match(/\d{1,2}/);
+  if (m) {
+    const n = parseInt(m[0], 10);
+    if (n >= 1 && n <= 12) return n;
+  }
+  const norm = _normTxt(s);
+  const i = _MESES_PT.findIndex(x => _normTxt(x) === norm);
+  return i >= 0 ? i + 1 : 0;
+}
+
+function _mesLabel(n) {
+  return String(n).padStart(2, '0') + ' ' + _MESES_PT[n - 1];
+}
+
+// Cabeçalho usado quando a aba db_bolsistas_mes_anterior vier sem linha de título
+const _CAB_MES_ANTERIOR = [
+  'Unidade', 'Mês', 'Ano', 'Nome do Aluno', 'Percentual Bolsas', 'Origem Bolsa',
+  'Data 1ª aula', 'Book Atual', 'Frequência', 'Data ínicio do Book',
+  'Data prevista para concluir o Book', 'HORÁRIO (Ex: 18h às 19:25h)',
+  'Dias previstos no mês', 'Dias assistidas no mês', 'Valor da Mensalidade',
+  'MT', 'WT', 'OC', 'OT', 'Aproveitamento', 'Observações', 'TURMA',
+  'Chave PDF', 'Dependente Unidade', 'Dependente Nome',
+  'Observações Extras E-mail', 'Status do Aluno',
+];
+
+const ABA_CONFERENCIA = 'conferencia_vigentes';
+
+function conferirVigentes(token) {
+  try {
+    const user = _getUser(token);
+    const res  = _conferirVigentes(user);
+    const semRow = arr => arr.map(o => {
+      const c = Object.assign({}, o);
+      delete c._row;
+      return c;
+    });
+    res.faltantes    = semRow(res.faltantes);
+    res.outraUnidade = semRow(res.outraUnidade);
+    return JSON.stringify(Object.assign({ ok: true }, res));
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
+}
+
+// user = null → sem restrição de unidade (uso no editor do Apps Script)
+function _conferirVigentes(user) {
+  const ss       = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+  const antSheet = ss.getSheetByName('db_bolsistas_mes_anterior');
+  const appSheet = ss.getSheetByName('Bolsistas App');
+  if (!antSheet) throw new Error('"db_bolsistas_mes_anterior" não encontrada.');
+  if (!appSheet) throw new Error('"Bolsistas App" não encontrada.');
+
+  const userUnidades = (!user || user.isAdmin || !user.unidade)
+    ? null
+    : _withUnidadeAliases(user.unidade.split(/[,|]/).map(s => _normTxt(s)).filter(Boolean));
+
+  // ── 1. Lê a aba do mês anterior ──
+  const ant = antSheet.getDataRange().getValues();
+  if (!ant.length) throw new Error('Aba db_bolsistas_mes_anterior está vazia.');
+  if (ant[0].length < 27) {
+    throw new Error('db_bolsistas_mes_anterior não chega até a coluna AA (Status do Aluno).');
+  }
+
+  // A aba pode ou não ter linha de cabeçalho — detecta em vez de assumir
+  const temCabecalho = _normTxt(ant[0][0]) === 'unidade' || _normTxt(ant[0][3]).indexOf('nome') >= 0;
+  const inicio = temCabecalho ? 1 : 0;
+
+  // Cabeçalho para reaproveitar na aba de conferência
+  const largura   = ant[0].length;
+  const cabecalho = temCabecalho
+    ? ant[0].slice(0, largura)
+    : _CAB_MES_ANTERIOR.concat(new Array(largura).fill('')).slice(0, largura);
+
+  // Mês/ano de referência = combinação mais frequente na aba (ignora linhas órfãs)
+  const freq = {};
+  for (let i = inicio; i < ant.length; i++) {
+    const mn = _mesNum(ant[i][1]);
+    if (!mn) continue;
+    const k = mn + '|' + String(ant[i][2] || '').trim();
+    freq[k] = (freq[k] || 0) + 1;
+  }
+  let refKey = '', refQtd = 0;
+  Object.keys(freq).forEach(k => { if (freq[k] > refQtd) { refQtd = freq[k]; refKey = k; } });
+  if (!refKey) throw new Error('Não foi possível identificar o mês na aba db_bolsistas_mes_anterior.');
+
+  const mesAntNum = parseInt(refKey.split('|')[0], 10);
+  const anoAnt    = refKey.split('|')[1];
+
+  let mesAlvoNum = mesAntNum + 1;
+  let anoAlvo    = anoAnt;
+  if (mesAlvoNum > 12) { mesAlvoNum = 1; anoAlvo = String(parseInt(anoAnt, 10) + 1); }
+
+  const vigentes = [];
+  let totalVigentesGeral = 0;
+  for (let i = inicio; i < ant.length; i++) {
+    const r    = ant[i];
+    const nome = String(r[3] || '').trim();
+    if (!nome) continue;
+    if (_normTxt(r[26]) !== 'vigente') continue;      // col AA
+    if (_mesNum(r[1]) !== mesAntNum) continue;        // ignora sobras de outros meses
+    totalVigentesGeral++;
+
+    const unidade = String(r[0] || '').trim();
+    if (userUnidades && !userUnidades.includes(_normTxt(unidade))) continue;
+
+    vigentes.push({
+      unidade,
+      nome,
+      origemBolsa: String(r[5]  || '').trim(),
+      book:        String(r[7]  || '').trim(),
+      turma:       String(r[21] || '').trim(),
+      linha:       i + 1,
+      _row:        r, // linha completa da aba do mês anterior
+    });
+  }
+
+  // ── 2. Índice do mês alvo na aba Bolsistas App ──
+  const app       = appSheet.getDataRange().getValues();
+  const presentes = {}; // "unidade|nome" → true
+  const porNome   = {}; // "nome" → unidade em que apareceu
+  let totalAlvo   = 0;
+
+  for (let i = 1; i < app.length; i++) {
+    const r = app[i];
+    if (_mesNum(r[3]) !== mesAlvoNum) continue;
+    if (String(r[4] || '').trim() !== String(anoAlvo)) continue;
+    const nome = String(r[5] || '').trim();
+    if (!nome) continue;
+
+    const unidade = String(r[2] || '').trim();
+    totalAlvo++;
+    presentes[_normTxt(unidade) + '|' + _normTxt(nome)] = true;
+    if (!porNome[_normTxt(nome)]) porNome[_normTxt(nome)] = unidade;
+  }
+
+  // ── 3. Cruzamento ──
+  const faltantes    = [];
+  const outraUnidade = [];
+  vigentes.forEach(v => {
+    if (presentes[_normTxt(v.unidade) + '|' + _normTxt(v.nome)]) return;
+    const alt = porNome[_normTxt(v.nome)];
+    if (alt) outraUnidade.push(Object.assign({ unidadeNoMesAtual: alt }, v));
+    else faltantes.push(v);
+  });
+
+  const porUnidadeNome = (a, b) =>
+    a.unidade === b.unidade ? a.nome.localeCompare(b.nome) : a.unidade.localeCompare(b.unidade);
+  faltantes.sort(porUnidadeNome);
+  outraUnidade.sort(porUnidadeNome);
+
+  return {
+    mesAnterior:    _mesLabel(mesAntNum) + ' ' + anoAnt,
+    mesAlvo:        _mesLabel(mesAlvoNum) + ' ' + anoAlvo,
+    totalVigentes:  vigentes.length,
+    totalVigentesGeral,
+    totalMesAlvo:   totalAlvo,
+    cabecalho,
+    faltantes,
+    outraUnidade,
+  };
+}
+
+// ─── Gera a aba "conferencia_vigentes" com as linhas completas ───
+// Reescreve APENAS a aba conferencia_vigentes. Nenhuma outra aba é tocada.
+function gerarAbaVigentesFaltantes(token) {
+  try {
+    const user = _getUser(token);
+    if (!user.isAdmin) throw new Error('Apenas administradores podem gerar a aba de conferência.');
+    const res = _gerarAbaVigentesFaltantes(user);
+    return JSON.stringify(Object.assign({ ok: true }, res));
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
+}
+
+function _gerarAbaVigentesFaltantes(user) {
+  const res = _conferirVigentes(user);
+  const ss  = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+
+  let sheet = ss.getSheetByName(ABA_CONFERENCIA);
+  if (sheet) sheet.clear();
+  else       sheet = ss.insertSheet(ABA_CONFERENCIA);
+
+  const nCols  = res.cabecalho.length;
+  const geradoEm = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+
+  // Linha 1: resumo | Linha 2: cabeçalho | Linha 3+: dados
+  const resumo = 'Vigentes de ' + res.mesAnterior + ' sem lançamento em ' + res.mesAlvo +
+                 '  ·  ' + res.faltantes.length + ' ausente(s), ' +
+                 res.outraUnidade.length + ' em outra unidade  ·  gerado em ' + geradoEm;
+  sheet.getRange(1, 1).setValue(resumo).setFontWeight('bold');
+
+  const cab = res.cabecalho.concat(['⚠️ Situação', 'Linha no mês anterior']);
+  sheet.getRange(2, 1, 1, cab.length).setValues([cab])
+       .setFontWeight('bold').setBackground('#e2e8f0');
+
+  const linhas = []
+    .concat(res.faltantes.map(f => ({ f, situacao: 'Ausente em ' + res.mesAlvo })))
+    .concat(res.outraUnidade.map(f => ({ f, situacao: 'Lançado na unidade ' + f.unidadeNoMesAtual })));
+
+  if (linhas.length) {
+    const values = linhas.map(x => {
+      const row = x.f._row.slice(0, nCols);
+      while (row.length < nCols) row.push('');
+      return row.concat([x.situacao, x.f.linha]);
+    });
+    sheet.getRange(3, 1, values.length, cab.length).setValues(values);
+  } else {
+    sheet.getRange(3, 1).setValue('✅ Nenhuma pendência — todos os Vigentes de ' +
+                                  res.mesAnterior + ' estão em ' + res.mesAlvo + '.');
+  }
+
+  sheet.setFrozenRows(2);
+  sheet.autoResizeColumns(1, cab.length);
+
+  return {
+    aba:         ABA_CONFERENCIA,
+    mesAnterior: res.mesAnterior,
+    mesAlvo:     res.mesAlvo,
+    faltantes:   res.faltantes.length,
+    outraUnidade: res.outraUnidade.length,
+    url:         ss.getUrl() + '#gid=' + sheet.getSheetId(),
+  };
+}
+
+// Rode direto no editor do Apps Script — gera/atualiza a aba conferencia_vigentes
+function testeGerarAbaVigentes() {
+  const r = _gerarAbaVigentesFaltantes(null);
+  Logger.log('Aba "%s" atualizada: %s ausente(s), %s em outra unidade (%s → %s)',
+             r.aba, r.faltantes, r.outraUnidade, r.mesAnterior, r.mesAlvo);
+  Logger.log(r.url);
+  return r;
+}
+
+// Rode esta função direto no editor do Apps Script (Executar → ver Registro de execução)
+function testeConferirVigentes() {
+  const r = _conferirVigentes(null);
+
+  Logger.log('Mês anterior: %s  →  mês conferido: %s', r.mesAnterior, r.mesAlvo);
+  Logger.log('Vigentes no mês anterior: %s | linhas lançadas no mês seguinte: %s',
+             r.totalVigentes, r.totalMesAlvo);
+
+  if (!r.faltantes.length && !r.outraUnidade.length) {
+    Logger.log('✅ OK — todos os Vigentes de %s estão em %s.', r.mesAnterior, r.mesAlvo);
+    return r;
+  }
+
+  if (r.faltantes.length) {
+    Logger.log('❌ FALTANDO em %s (%s aluno(s)):', r.mesAlvo, r.faltantes.length);
+    r.faltantes.forEach(f =>
+      Logger.log('   • %s | %s | %s | %s (linha %s do mês anterior)',
+                 f.unidade, f.nome, f.origemBolsa, f.book, f.linha));
+  }
+
+  if (r.outraUnidade.length) {
+    Logger.log('⚠️ Lançados em OUTRA unidade (%s):', r.outraUnidade.length);
+    r.outraUnidade.forEach(f =>
+      Logger.log('   • %s: era %s, aparece em %s', f.nome, f.unidade, f.unidadeNoMesAtual));
+  }
+
+  return r;
+}
+
+// ─── Diagnóstico: o que existe na coluna AD (Dias de Aula) ───
+// Só lê. Lista os valores distintos e marca quais o cálculo de
+// "% Faltas no Módulo" (Index.html, _DIA_SEMANA) consegue interpretar.
+function listarValoresDiasAula() {
+  const DIAS_OK = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
+
+  const sheet = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID).getSheetByName('Bolsistas App');
+  if (!sheet) throw new Error('"Bolsistas App" não encontrada.');
+
+  const data  = sheet.getDataRange().getValues();
+  const conta = {};
+  let vazias = 0, total = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const nome = String(data[i][5] || '').trim();
+    if (!nome) continue;
+    total++;
+    const v = String(data[i][29] || '').trim(); // col AD
+    if (!v) { vazias++; continue; }
+    if (!conta[v]) conta[v] = { qtd: 0, exemplo: nome + ' (' + String(data[i][3] || '') + ')' };
+    conta[v].qtd++;
+  }
+
+  const chaves = Object.keys(conta).sort((a, b) => conta[b].qtd - conta[a].qtd);
+
+  Logger.log('Linhas com aluno: %s | AD preenchida: %s | AD vazia: %s',
+             total, total - vazias, vazias);
+  Logger.log('Valores distintos na coluna AD: %s', chaves.length);
+
+  chaves.forEach(v => {
+    const tokens = v.split(',').map(s => _normTxt(s)).filter(Boolean);
+    const naoLidos = tokens.filter(t => DIAS_OK.indexOf(t) < 0);
+    const marca = !tokens.length ? '❓'
+                : naoLidos.length ? '⚠️ não interpretado: ' + naoLidos.join(' / ')
+                : '✅';
+    Logger.log('  %s×  "%s"  %s   [ex: %s]', conta[v].qtd, v, marca, conta[v].exemplo);
+  });
+
+  Logger.log('Legenda: ✅ o cálculo de faltas entende | ⚠️ o PDF mostra, mas o cálculo ignora');
+  return chaves.length;
+}
+
 // ─── Diagnóstico: testa leitura da aba RJ-UNIDADES ───────────
 function testeFuncionarios() {
   const fss = SpreadsheetApp.openById(FUNCIONARIOS_SHEET_ID);
