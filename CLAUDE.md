@@ -87,7 +87,9 @@ Todos client-side via `applyFilters()` sobre `FULL_ROWS`. Multi-select: Ano, Mê
 | `getEmailPreview(token, chavePDF)` | Retorna info do parceiro + destinatários para preview no modal |
 | `enviarEmail(token, payloadJson)` | Envia e-mail com PDF anexado para o parceiro |
 | `getChavesPDF(token, mes, ano)` | Lista chaves PDF disponíveis (ainda existe, não mais usado pelo frontend) |
-| `runCicloMensal(token)` | Executa ciclo mensal (backup + consolidado → Bolsistas App) |
+| `runCicloMensal(token)` | Ciclo mensal antigo (backup C:W + consolidado A:V → C:X). Mantido até o V2 ser validado |
+| `runCicloMensalV2(token, dryRun)` | Ciclo mensal novo, 6 passos. `testeCicloMensalSimulado()` simula sem gravar; `executarCicloMensalV2()` executa. Config de colunas em `CICLO_CFG` |
+| `mapearAbas()` | Diagnóstico: loga cabeçalho + letra de coluna de todas as abas do ciclo |
 | `conferirVigentes(token)` | Confere se todo aluno `Vigente` (col AA) de `db_bolsistas_mes_anterior` foi lançado no mês seguinte em `Bolsistas App`. Roda no editor via `testeConferirVigentes()` |
 | `gerarAbaVigentesFaltantes(token)` | Mesma conferência, mas grava o resultado na aba `conferencia_vigentes` com as linhas completas do mês anterior. Admin-only. Roda no editor via `testeGerarAbaVigentes()` |
 
@@ -110,6 +112,46 @@ Todos client-side via `applyFilters()` sobre `FULL_ROWS`. Multi-select: Ano, Mê
 - ~~Envio por empresa individual~~ — cada empresa tem seus próprios botões independentes
 - ~~Conferência de Vigentes~~ — `conferirVigentes` / `testeConferirVigentes` em `Code.gs`. Cruza os `Vigente` do mês anterior com o mês seguinte de `Bolsistas App` (chave: unidade + nome, normalizados). `gerarAbaVigentesFaltantes` / `testeGerarAbaVigentes` escreve o resultado na aba `conferencia_vigentes` (recriada a cada execução; nenhuma outra aba é tocada). Sem UI no painel ainda.
 - ~~Guia de Preenchimento~~ — aba `data-tab="guia"` / `viewGuia` com conteúdo estático (baseado no Manual de Preenchimento do Relatório de Bolsistas). Sem token de acesso próprio: visível para qualquer usuário com acesso ao painel (não gated por `acessos_dashboards`), pois é conteúdo de referência, não dado sensível.
+
+## Mapa de colunas (verificado em 04/08/2026 via `mapearAbas()`)
+
+| Aba | Colunas | Marcos |
+|---|---|---|
+| `Bolsistas App` | 34 (A:AH) | AC Status do Aluno · **AD Dias** · AE/AF Teste 1 e 2 · AG flag editado webapp · AH e-mail enviado |
+| `bolsistas_consolidado` | 32 (A:AF) | AA Status do Aluno · **AB Dias Ajuste** · AC Horas unitário · AD Frequência ajuste · AE Data máxima · **AF Considerar?** |
+| `db_bolsistas_mes_anterior` | 27 (A:AA) | espelha `Bolsistas App` C:AC · AA Status do Aluno |
+| `db_alunos` | 23 (A:W) | Q Considerar? · V Mês Ajustado |
+| `db_turmas` | 33 (A:AG) | AA Mês Ajustado · AF Dias da Semana · AG Dias Ajuste |
+
+⚠️ O consolidado ganhou 5 colunas vazias (W:AA) em algum momento, empurrando `Considerar?` de **AA para AF** e `Dias Ajuste` de **Y para AB**. Isso quebrou silenciosamente:
+
+- `_calcularDiasUteis` e `_copiarConsolidado` no `Code.gs` — **corrigidos**
+- a macro `calcularDiasUteisComFeriados` no Apps Script da própria planilha — **continua defasada** (`colunaVerificacao = 27`, `diasAulaColuna = 25`); como o filtro exige `"Sim"` numa coluna que hoje tem `Vigente`, ela não atualiza nenhuma linha
+
+**Não confie na leitura de planilha via MCP do Drive para conferir colunas** — ele comprime colunas vazias e desloca as letras. Use `mapearAbas()`.
+
+## Ciclo Mensal V2
+
+Sequência em `_cicloMensalV2(dryRun)`:
+
+1. Backup do último mês de `Bolsistas App` → `db_bolsistas_mes_anterior` (**C:AD → A:AB**, com cabeçalho)
+2. `_calcularDiasUteis()` — dias previstos na col M do `bolsistas_consolidado`
+3. Consolidado com "Sim" → `Bolsistas App` (**A:AB → C:AD**)
+4. `_formatarHorarios()` — roda **após** a gravação
+5. Vigentes do mês anterior ausentes no consolidado são herdados, com Mês/Ano do ciclo novo
+6. Col A = data, col B = `adriane@brasas.com`
+
+`CICLO_NAO_HERDA` define o que não passa do mês anterior no passo 5: observações (W), dias previstos/assistidos, MT/WT/OC/OT e aproveitamento.
+
+**Sábado conta 2 aulas** no cálculo de dias previstos — regra da macro original da planilha e do `calcTotalDiasModulo` no frontend. `_calcularDiasUteis` contava 1 até ser corrigido.
+
+### Estado / próximos passos
+
+1. **Pendente:** rodar `testeCicloMensalSimulado()` e conferir o log (nº de linhas com "Sim" na AF, mês detectado, lista de vigentes herdados). Nada do V2 foi executado ainda.
+2. Depois de validar, `executarCicloMensalV2()`.
+3. Conferir de onde vêm hoje os valores da col M do consolidado ("Dias Previstos no mês") — se a macro defasada era a fonte, os números podem estar desatualizados.
+4. `runCicloMensal` (antigo) está desativado e retorna erro apontando para o V2.
+5. Nada disso está publicado no Apps Script — só no repositório.
 
 ## Line endings
 

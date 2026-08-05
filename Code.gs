@@ -522,23 +522,19 @@ function updateBolsista(token, payloadJson) {
 }
 
 // ─── Ciclo Mensal ────────────────────────────────────────────
+// OBSOLETO — os índices de _backupMesAnterior e _copiarConsolidado ficaram
+// defasados quando o bolsistas_consolidado ganhou colunas (o "Considerar?"
+// saiu de AA para AF). Rodar isto copiaria colunas erradas para a
+// "Bolsistas App". Use runCicloMensalV2 / executarCicloMensalV2.
 function runCicloMensal(token) {
-  try {
-    const user = _getUser(token);
-    if (!user.isAdmin) throw new Error('Apenas administradores podem executar o ciclo mensal.');
-
-    const log = [];
-    log.push(_backupMesAnterior());
-    log.push(_calcularDiasUteis());
-    log.push(_copiarConsolidado());
-    log.push(_formatarHorarios());
-
-    return JSON.stringify({ ok: true, log });
-  } catch (e) {
-    return JSON.stringify({ ok: false, error: e.message });
-  }
+  return JSON.stringify({
+    ok: false,
+    error: 'Ciclo mensal antigo desativado (índices de coluna defasados). ' +
+           'Use executarCicloMensalV2() — rode antes testeCicloMensalSimulado().',
+  });
 }
 
+// OBSOLETO — copia C:W (21 cols); o backup correto é C:AD, feito pelo _cicloMensalV2
 function _backupMesAnterior() {
   const ss        = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
   const appSheet  = ss.getSheetByName('Bolsistas App');
@@ -585,42 +581,54 @@ function _calcularDiasUteis() {
     : [];
 
   const data = sheet.getDataRange().getValues();
-  const ano  = new Date().getFullYear();
   const diasSemana = {
-    'domingo': 0, 'segunda': 1, 'terça': 2, 'quarta': 3,
-    'quinta': 4, 'sexta': 5, 'sábado': 6,
+    'domingo': 0, 'segunda': 1, 'terca': 2, 'quarta': 3,
+    'quinta': 4, 'sexta': 5, 'sabado': 6,
   };
+
+  // Coluna M inteira, para gravar de uma vez só no fim
+  const colM = data.map(r => [r[12]]);
 
   let count = 0;
   for (let i = 1; i < data.length; i++) {
-    if (String(data[i][26] || '').trim() !== 'Sim') continue; // col AA
+    if (_normTxt(data[i][31]) !== 'sim') continue; // col AF = Considerar?
 
-    const mesTexto    = String(data[i][1]  || '').trim(); // col B
-    const diasAulaStr = String(data[i][24] || '').trim(); // col Y
+    const mesTexto    = String(data[i][1]  || '').trim(); // col B  = Mês
+    const diasAulaStr = String(data[i][27] || '').trim(); // col AB = Dias Ajuste
     if (!mesTexto || !diasAulaStr) continue;
 
     const mesNum = parseInt(mesTexto.split(' ')[0], 10);
     if (isNaN(mesNum)) continue;
 
+    // Ano vem da própria linha (col C); cai no ano corrente só se estiver vazio
+    const ano = parseInt(String(data[i][2] || '').trim(), 10) || new Date().getFullYear();
+
     const ultimoDia    = new Date(ano, mesNum, 0).getDate();
     const diasAulaNums = diasAulaStr.split(',')
-      .map(s => diasSemana[s.toLowerCase().trim()])
+      .map(s => diasSemana[_normTxt(s)])
       .filter(n => n !== undefined);
+    if (!diasAulaNums.length) continue;
 
     let dias = 0;
     for (let d = 1; d <= ultimoDia; d++) {
       const dt  = new Date(ano, mesNum - 1, d);
       const fmt = Utilities.formatDate(dt, 'GMT-3', 'dd/MM');
-      if (diasAulaNums.includes(dt.getDay()) && !feriados.includes(fmt)) dias++;
+      // Sábado conta 2 (aula dupla), como na macro original da planilha
+      if (diasAulaNums.includes(dt.getDay()) && !feriados.includes(fmt)) {
+        dias += (dt.getDay() === 6) ? 2 : 1;
+      }
     }
 
-    sheet.getRange(i + 1, 13).setValue(dias); // col M
+    colM[i][0] = dias;
     count++;
   }
+
+  sheet.getRange(1, 13, colM.length, 1).setValues(colM); // col M, de uma vez
 
   return `Dias úteis calculados: ${count} linhas atualizadas.`;
 }
 
+// OBSOLETO — filtra pela col AA e copia A:V; o correto é AF e A:AB, no _cicloMensalV2
 function _copiarConsolidado() {
   const ss        = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
   const consSheet = ss.getSheetByName('bolsistas_consolidado');
@@ -960,6 +968,242 @@ function testeConferirVigentes() {
   }
 
   return r;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CICLO MENSAL V2
+// ═══════════════════════════════════════════════════════════
+// Passos (numeração conforme combinado):
+//   1. Backup do último mês de "Bolsistas App" → db_bolsistas_mes_anterior
+//   2. Calcular Dias Previstos  → _calcularDiasUteis()
+//   3. bolsistas_consolidado ("Sim") A:AB → Bolsistas App C:AD
+//   4. Ajuste de Horas          → _formatarHorarios()  (roda após a gravação)
+//   5. Vigentes do mês anterior que não vieram no consolidado → inseridos
+//   6. Preenche col A (data) e col B (e-mail) das linhas inseridas
+//
+// ⚠️ CONFIRA CICLO_CFG com mapearAbas() antes de rodar sem dryRun.
+
+const CICLO_CFG = {
+  emailResponsavel: 'adriane@brasas.com',
+
+  // Bolsistas App (1-based)
+  APP_TIMESTAMP: 1,   // A
+  APP_EMAIL:     2,   // B
+  APP_INICIO:    3,   // C — início do bloco de dados
+  APP_FIM:      30,   // AD — fim do bloco (28 colunas)
+
+  // bolsistas_consolidado (1-based)
+  CONS_CONSIDERAR: 32, // AF — coluna do "Sim"
+  CONS_INICIO:      1, // A
+  CONS_FIM:        28, // AB
+};
+
+// Offsets dentro do bloco de 28 colunas.
+// 0 = col C da Bolsistas App = col A da db_bolsistas_mes_anterior.
+const CICLO_OFF = {
+  unidade: 0, mes: 1, ano: 2, nome: 3,
+  diasPrevistos: 12, diasAssistidos: 13,
+  mt: 15, wt: 16, oc: 17, ot: 18, aproveitamento: 19, observacoes: 20,
+  status: 26, diasAula: 27,
+};
+
+// Campos que NÃO são herdados do mês anterior no passo 5 (são dados do mês)
+const CICLO_NAO_HERDA = [
+  CICLO_OFF.observacoes,    // col W — combinado: nunca herda
+  CICLO_OFF.diasPrevistos,
+  CICLO_OFF.diasAssistidos,
+  CICLO_OFF.mt, CICLO_OFF.wt, CICLO_OFF.oc, CICLO_OFF.ot,
+  CICLO_OFF.aproveitamento,
+];
+
+function runCicloMensalV2(token, dryRun) {
+  try {
+    const user = _getUser(token);
+    if (!user.isAdmin) throw new Error('Apenas administradores podem executar o ciclo mensal.');
+    return JSON.stringify({ ok: true, log: _cicloMensalV2(dryRun !== false) });
+  } catch (e) {
+    return JSON.stringify({ ok: false, error: e.message });
+  }
+}
+
+// dryRun = true → não escreve nada, só relata o que faria
+function _cicloMensalV2(dryRun) {
+  const cfg   = CICLO_CFG;
+  const largura = cfg.APP_FIM - cfg.APP_INICIO + 1;
+  const log   = [];
+  const diga  = m => { log.push(m); Logger.log(m); };
+
+  if (cfg.CONS_FIM - cfg.CONS_INICIO + 1 !== largura) {
+    throw new Error('CICLO_CFG inconsistente: o bloco do consolidado e o da Bolsistas App ' +
+                    'têm larguras diferentes.');
+  }
+
+  diga(dryRun ? '=== SIMULAÇÃO — nada será gravado ===' : '=== EXECUÇÃO REAL ===');
+
+  const ss       = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+  const appSheet = ss.getSheetByName('Bolsistas App');
+  const consSheet= ss.getSheetByName('bolsistas_consolidado');
+  const antSheet = ss.getSheetByName('db_bolsistas_mes_anterior');
+  if (!appSheet)  throw new Error('"Bolsistas App" não encontrada.');
+  if (!consSheet) throw new Error('"bolsistas_consolidado" não encontrada.');
+  if (!antSheet)  throw new Error('"db_bolsistas_mes_anterior" não encontrada.');
+
+  // ── Passo 1: backup do último mês ──
+  const appData = appSheet.getDataRange().getValues();
+  let ultMes = 0, ultAno = '';
+  for (let i = 1; i < appData.length; i++) {
+    const mn = _mesNum(appData[i][cfg.APP_INICIO - 1 + CICLO_OFF.mes]);
+    const an = String(appData[i][cfg.APP_INICIO - 1 + CICLO_OFF.ano] || '').trim();
+    if (!mn || !an) continue;
+    if (Number(an) > Number(ultAno) || (an === ultAno && mn > ultMes)) { ultMes = mn; ultAno = an; }
+  }
+  if (!ultMes) throw new Error('Nenhuma linha com mês/ano em "Bolsistas App".');
+
+  const backup = [];
+  for (let i = 1; i < appData.length; i++) {
+    const r = appData[i];
+    if (_mesNum(r[cfg.APP_INICIO - 1 + CICLO_OFF.mes]) !== ultMes) continue;
+    if (String(r[cfg.APP_INICIO - 1 + CICLO_OFF.ano] || '').trim() !== ultAno) continue;
+    backup.push(r.slice(cfg.APP_INICIO - 1, cfg.APP_FIM));
+  }
+  diga('1. Backup: ' + backup.length + ' linhas de ' + _mesLabel(ultMes) + ' ' + ultAno +
+       ' → db_bolsistas_mes_anterior (C:AD → A:AB)');
+
+  if (!dryRun && backup.length) {
+    antSheet.clearContents();
+    antSheet.getRange(1, 1, 1, largura).setValues([_CAB_MES_ANTERIOR
+      .concat(new Array(largura).fill('')).slice(0, largura)]);
+    antSheet.getRange(2, 1, backup.length, largura).setValues(backup);
+  }
+
+  // ── Passo 2: dias previstos (escreve col M do consolidado) ──
+  if (dryRun) diga('2. Calcular Dias Previstos — pulado na simulação (escreve a col M do consolidado)');
+  else        diga('2. ' + _calcularDiasUteis());
+
+  // ── Passo 3: consolidado → Bolsistas App ──
+  const consData = consSheet.getDataRange().getValues();
+  if (consData[0].length < cfg.CONS_CONSIDERAR) {
+    throw new Error('bolsistas_consolidado não chega até a coluna do "Considerar?" ' +
+                    '(CICLO_CFG.CONS_CONSIDERAR = ' + cfg.CONS_CONSIDERAR + '). Rode mapearAbas().');
+  }
+
+  const novas = [];
+  for (let i = 1; i < consData.length; i++) {
+    if (_normTxt(consData[i][cfg.CONS_CONSIDERAR - 1]) !== 'sim') continue;
+    novas.push(consData[i].slice(cfg.CONS_INICIO - 1, cfg.CONS_FIM));
+  }
+  diga('3. Consolidado: ' + novas.length + ' linhas com "Sim" na coluna ' +
+       _letraCol(cfg.CONS_CONSIDERAR) + ' → Bolsistas App C:AD');
+  if (!novas.length) throw new Error('Nenhuma linha marcada "Sim" no consolidado — ciclo abortado.');
+
+  // Mês/ano do ciclo novo = combinação mais frequente entre as linhas do consolidado
+  const freqNovo = {};
+  novas.forEach(r => {
+    const mn = _mesNum(r[CICLO_OFF.mes]);
+    if (mn) {
+      const k = mn + '|' + String(r[CICLO_OFF.ano] || '').trim();
+      freqNovo[k] = (freqNovo[k] || 0) + 1;
+    }
+  });
+  let kNovo = '', qNovo = 0;
+  Object.keys(freqNovo).forEach(k => { if (freqNovo[k] > qNovo) { qNovo = freqNovo[k]; kNovo = k; } });
+  if (!kNovo) throw new Error('Linhas do consolidado sem mês/ano identificável.');
+  const mesNovo = parseInt(kNovo.split('|')[0], 10);
+  const anoNovo = kNovo.split('|')[1];
+  diga('   Mês do ciclo: ' + _mesLabel(mesNovo) + ' ' + anoNovo);
+
+  // ── Passo 5: vigentes do mês anterior que não vieram no consolidado ──
+  const presentes = {};
+  novas.forEach(r => {
+    presentes[_normTxt(r[CICLO_OFF.unidade]) + '|' + _normTxt(r[CICLO_OFF.nome])] = true;
+  });
+
+  const herdadas = [];
+  backup.forEach(r => {
+    if (_normTxt(r[CICLO_OFF.status]) !== 'vigente') return;
+    if (presentes[_normTxt(r[CICLO_OFF.unidade]) + '|' + _normTxt(r[CICLO_OFF.nome])]) return;
+
+    const linha = r.slice(0, largura);
+    while (linha.length < largura) linha.push('');
+    linha[CICLO_OFF.mes] = _mesLabel(mesNovo);
+    linha[CICLO_OFF.ano] = anoNovo;
+    CICLO_NAO_HERDA.forEach(off => { linha[off] = ''; });
+    herdadas.push(linha);
+  });
+
+  diga('5. Vigentes herdados do mês anterior: ' + herdadas.length);
+  herdadas.forEach(l => diga('   + ' + l[CICLO_OFF.unidade] + ' | ' + l[CICLO_OFF.nome]));
+
+  // ── Passos 3 + 5 + 6: grava tudo ──
+  const todas = novas.concat(herdadas);
+  const agora = new Date();
+  diga('6. Data e ' + cfg.emailResponsavel + ' nas colunas A e B de ' + todas.length + ' linhas');
+
+  if (!dryRun) {
+    const startRow = appSheet.getLastRow() + 1;
+    const fullRows = todas.map(r => {
+      const row = new Array(cfg.APP_FIM).fill('');
+      row[cfg.APP_TIMESTAMP - 1] = agora;
+      row[cfg.APP_EMAIL - 1]     = cfg.emailResponsavel;
+      for (let j = 0; j < largura; j++) row[cfg.APP_INICIO - 1 + j] = r[j];
+      return row;
+    });
+    appSheet.getRange(startRow, 1, fullRows.length, cfg.APP_FIM).setValues(fullRows);
+    diga('→ ' + fullRows.length + ' linhas gravadas a partir da linha ' + startRow + '.');
+    // Passo 4: roda depois da gravação, para pegar os horários recém-inseridos
+    diga('4. ' + _formatarHorarios());
+  } else {
+    diga('→ SIMULAÇÃO: ' + todas.length + ' linhas seriam gravadas. Nada foi alterado.');
+    diga('4. Ajuste de Horas — rodaria após a gravação (formata a col N da Bolsistas App)');
+  }
+
+  return log;
+}
+
+function _letraCol(n) {
+  let s = '';
+  while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = (n - r - 1) / 26; }
+  return s;
+}
+
+// Simulação — seguro, não grava nada
+function testeCicloMensalSimulado() { return _cicloMensalV2(true); }
+
+// Execução real — só rode depois de conferir a simulação
+function executarCicloMensalV2() { return _cicloMensalV2(false); }
+
+// ─── Diagnóstico: mapa de colunas das abas do ciclo mensal ───
+// Só lê. Loga o cabeçalho de cada aba com a letra da coluna, para conferir
+// os índices antes de mexer no ciclo mensal.
+function mapearAbas() {
+  const ABAS = ['Bolsistas App', 'bolsistas_consolidado', 'db_bolsistas_mes_anterior',
+                'db_alunos', 'db_turmas'];
+
+  const letra = _letraCol;
+
+  const ss = SpreadsheetApp.openById(BOLSISTAS_SHEET_ID);
+  Logger.log('Abas existentes: %s', ss.getSheets().map(s => s.getName()).join(' | '));
+
+  ABAS.forEach(nome => {
+    const sh = ss.getSheetByName(nome);
+    Logger.log('');
+    if (!sh) { Logger.log('=== %s → NÃO ENCONTRADA', nome); return; }
+
+    const nCols = sh.getLastColumn();
+    const nRows = sh.getLastRow();
+    Logger.log('=== %s — %s linhas × %s colunas (até %s)', nome, nRows, nCols, letra(nCols));
+    if (!nRows || !nCols) return;
+
+    const cab = sh.getRange(1, 1, 1, nCols).getValues()[0];
+    const ex  = nRows > 1 ? sh.getRange(2, 1, 1, nCols).getValues()[0] : [];
+    for (let j = 0; j < nCols; j++) {
+      const titulo  = String(cab[j] || '').trim();
+      const exemplo = String(ex[j] == null ? '' : ex[j]).trim();
+      Logger.log('   %s = %s%s', letra(j + 1),
+                 titulo || '(sem título)',
+                 exemplo ? '   [ex: ' + exemplo.slice(0, 40) + ']' : '');
+    }
+  });
 }
 
 // ─── Diagnóstico: o que existe na coluna AD (Dias de Aula) ───
